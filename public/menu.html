@@ -18,6 +18,12 @@
   .a { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px dashed #E2CFB2; }
   .a div { flex: 1; } .a b { display: block; } .a small { color: #6B3A26; }
   .a span { font-weight: 700; white-space: nowrap; }
+  .a { align-items: center; } .q { display: flex; align-items: center; gap: 8px; }
+  .q button { width: 38px; height: 38px; border-radius: 50%; border: 0; background: #B03F1B; color: #fff; font-size: 22px; font-weight: 700; box-shadow: 0 3px 0 #7A2A10; }
+  .q button[data-m] { background: #fff; color: #4A1A0C; box-shadow: 0 3px 0 #C9B08C; }
+  .ok { background: #E4EFDD; border-left: 5px solid #4F7A3A; border-radius: 8px; padding: 10px 14px; margin: 12px 0; } .ok.erro { background: #FBE9DF; border-color: #B03F1B; }
+  #cesto { display: none; position: fixed; left: 0; right: 0; bottom: 0; background: #4A1A0C; color: #FAF3E8; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); align-items: center; justify-content: space-between; gap: 12px; font-weight: 700; box-shadow: 0 -8px 24px rgba(0,0,0,.3); }
+  #cesto button { border: 0; border-radius: 12px; background: #CC5A31; color: #fff; font: inherit; padding: 12px 18px; box-shadow: 0 3px 0 #7A2A10; }
   footer { text-align: center; color: #6B3A26; font-size: 13px; margin-top: 30px; }
 </style>
 </head>
@@ -25,19 +31,46 @@
 <div class="w">
   <header><img src="/logo.png" alt="Mesa de Imbondeiro"><p id="local"></p></header>
   <nav id="nav"></nav>
+  <div id="msg"></div>
   <div id="menu"><p style="text-align:center">A carregar o menu…</p></div>
   <footer>Preços em kwanzas, com impostos incluídos.</footer>
 </div>
+<div id="cesto"><span id="cestoTxt"></span><button id="enviar">Enviar pedido</button></div>
 <script>
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kz = (n) => new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 0 }).format(Math.round(n || 0)).replace(/\s/g, ' ') + ' Kz';
-const l = new URLSearchParams(location.search).get('l') || 'principal';
-fetch('/api/menu?l=' + encodeURIComponent(l)).then((r) => r.json()).then((m) => {
+const qs = new URLSearchParams(location.search), l = qs.get('l') || 'principal', mesaId = qs.get('m') || '';
+let M = null; const cesto = {};
+const el = (id) => document.getElementById(id);
+function desenha() {
+  el('menu').innerHTML = M.familias.map((f, i) => `<h2 id="f${i}">${esc(f.nome)}</h2>` + f.artigos.map((a) => `<div class="a"><div><b>${esc(a.nome)}</b><small>${esc(a.descricao)}</small></div><span>${kz(a.preco)}</span>${M.mesa ? `<div class="q">${cesto[a.id] ? `<button data-m="${a.id}">−</button><b>${cesto[a.id]}</b>` : ''}<button data-p="${a.id}">+</button></div>` : ''}</div>`).join('')).join('');
+  const arts = M.familias.flatMap((f) => f.artigos), n = Object.values(cesto).reduce((s, x) => s + x, 0), t = arts.reduce((s, a) => s + (cesto[a.id] || 0) * a.preco, 0);
+  el('cesto').style.display = n ? 'flex' : 'none'; el('cestoTxt').textContent = n + (n === 1 ? ' artigo · ' : ' artigos · ') + kz(t);
+}
+document.addEventListener('click', async (e) => {
+  const p = e.target.dataset.p, m = e.target.dataset.m;
+  if (p) { cesto[p] = Math.min(20, (cesto[p] || 0) + 1); desenha(); }
+  if (m) { cesto[m] = (cesto[m] || 0) - 1; if (cesto[m] <= 0) delete cesto[m]; desenha(); }
+  if (e.target.id === 'enviar') {
+    e.target.disabled = true;
+    try {
+      const r = await fetch('/api/pedido-publico', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ l, mesa: mesaId, itens: Object.entries(cesto).map(([artigo_id, qtd]) => ({ artigo_id, qtd })) }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.erro || 'Não foi possível enviar');
+      Object.keys(cesto).forEach((k) => delete cesto[k]); desenha();
+      el('msg').innerHTML = '<div class="ok"><b>Pedido recebido.</b><br>O empregado vai confirmá-lo consigo antes de seguir para a cozinha.</div>'; window.scrollTo(0, 0);
+    } catch (er) { el('msg').innerHTML = '<div class="ok erro">' + esc(er.message) + '</div>'; window.scrollTo(0, 0); }
+    e.target.disabled = false;
+  }
+});
+fetch('/api/menu?l=' + encodeURIComponent(l) + (mesaId ? '&m=' + encodeURIComponent(mesaId) : '')).then((r) => r.json()).then((m) => {
   if (m.erro) throw new Error(m.erro);
-  document.getElementById('local').textContent = m.local + (m.morada ? ' · ' + m.morada : '');
-  document.getElementById('nav').innerHTML = m.familias.map((f, i) => `<a href="#f${i}">${esc(f.nome)}</a>`).join('');
-  document.getElementById('menu').innerHTML = m.familias.map((f, i) => `<h2 id="f${i}">${esc(f.nome)}</h2>` + f.artigos.map((a) => `<div class="a"><div><b>${esc(a.nome)}</b><small>${esc(a.descricao)}</small></div><span>${kz(a.preco)}</span></div>`).join('')).join('');
-}).catch((e) => { document.getElementById('menu').innerHTML = '<p style="text-align:center">Não foi possível carregar o menu. ' + esc(e.message) + '</p>'; });
+  M = m;
+  el('local').textContent = m.local + (m.mesa ? ' · ' + m.mesa.nome : '') + (m.morada ? ' · ' + m.morada : '');
+  el('nav').innerHTML = m.familias.map((f, i) => `<a href="#f${i}">${esc(f.nome)}</a>`).join('');
+  if (m.mesa) el('msg').innerHTML = '<div class="ok">Pode pedir a partir daqui: toque em + nos artigos e envie o pedido.</div>';
+  desenha();
+}).catch((e) => { el('menu').innerHTML = '<p style="text-align:center">Não foi possível carregar o menu. ' + esc(e.message) + '</p>'; });
 </script>
+
 </body>
 </html>

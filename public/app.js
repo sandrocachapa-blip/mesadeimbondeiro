@@ -63,7 +63,7 @@ async function sync() {
   } finally {
     aSincronizar = false;
     pintarEstado();
-    if (S.token && JSON.stringify(S.st) !== antes && (antes === 'null' || (VIVAS.includes(rota().v) && !$('#modal').classList.contains('on')))) render();
+    if (S.token && JSON.stringify(S.st) !== antes && (antes === 'null' || (VIVAS.includes(rota().v) && !S.x.editar && document.activeElement.id !== 'busca' && !$('#modal').classList.contains('on')))) render();
   }
 }
 function pintarEstado() {
@@ -114,7 +114,7 @@ function op(tipo, d) {
 }
 
 /* ---------- Modal e formulários ---------- */
-function modal(html) { const m = $('#modal'); m.innerHTML = '<div class="cx">' + html + '</div>'; m.classList.add('on'); const i = $('input:not([type=hidden]), select', m); if (i) setTimeout(() => i.focus(), 30); }
+function modal(html, cls) { const m = $('#modal'); m.innerHTML = '<div class="cx ' + (cls || '') + '">' + html + '</div>'; m.classList.add('on'); const i = $('input:not([type=hidden]), select', m); if (i) setTimeout(() => i.focus(), 30); }
 function fechar() { $('#modal').classList.remove('on'); $('#modal').innerHTML = ''; }
 function form(titulo, campos, ok, extra) {
   modal(`<h2>${esc(titulo)}</h2><form id="f">${campos.map((c) => {
@@ -135,29 +135,37 @@ const rota = () => { const [v, id] = location.hash.replace(/^#\/?/, '').split('/
 const ir = (h) => { if (location.hash === '#' + h) render(); else location.hash = h; };
 function menus() {
   const p = S.user.perfil;
-  if (p === 'cozinha') return [['cozinha', 'Cozinha']];
-  if (p === 'bar') return [['bar', 'Bar']];
-  const m = [['mesas', 'Mesas'], ['cozinha', 'Cozinha'], ['bar', 'Bar']];
-  if (pode('pagar')) m.push(['caixa', 'Caixa'], ['facturacao', 'Facturação']);
-  if (pode('aprovar')) m.push(['relatorios', 'Relatórios']);
-  if (pode('cfg')) m.push(['menu', 'Menu digital'], ['config', 'Configuração'], ['fases', 'Próximas fases']);
-  return m;
+  if (p === 'cozinha') return [{ g: 'Operação', i: [['cozinha', 'Cozinha'], ['equipa', 'Ponto']] }];
+  if (p === 'bar') return [{ g: 'Operação', i: [['bar', 'Bar'], ['equipa', 'Ponto']] }];
+  const op = [['mesas', 'Mesas'], ['cozinha', 'Cozinha'], ['bar', 'Bar'], ['reservas', 'Reservas']];
+  if (pode('pagar')) op.push(['caixa', 'Caixa'], ['facturacao', 'Facturação']);
+  op.push(['clientes', 'Clientes']);
+  const g = [{ g: 'Operação', i: op }];
+  if (pode('cfg')) g.push({ g: 'Retaguarda', i: [['stock', 'Stock'], ['compras', 'Compras'], ['fornecedores', 'Fornecedores'], ['fichas', 'Fichas e custos']] });
+  if (pode('aprovar')) g.push({ g: 'Pessoas e dinheiro', i: [['equipa', 'Equipa e ponto'], ['salarios', 'Salários'], ['daf', 'Finanças (DAF)']] });
+  else g[0].i.push(['equipa', 'Ponto']);
+  if (pode('aprovar')) { const m = [['painel', 'Painel e alertas'], ['relatorios', 'Relatórios']]; if (pode('admin')) m.push(['grupo', 'Grupo']); m.push(['menu', 'Menu digital'], ['config', 'Configuração']); g.push({ g: 'Gestão', i: m }); }
+  return g;
 }
+const VIEWS = {};
 function sair(silencioso) { S.token = ''; S.user = null; ls.del('token'); ls.del('user'); if (!silencioso) { S.st = null; ls.del('state'); } render(); }
 
 function render() {
   const app = $('#app');
   if (!S.token || !S.user) return (app.innerHTML = vLogin());
   if (!S.st) { app.innerHTML = '<div class="login"><div class="cx"><img src="/logo.png" alt=""><p>A carregar…</p><p class="mudo">Na primeira utilização é precisa ligação à internet.</p></div></div>'; return; }
-  const ms = menus(), r = rota();
-  if (!ms.some((m) => m[0] === r.v) && r.v !== 'pedido') { location.hash = ms[0][0]; return; }
+  const gs = menus(), todos = gs.flatMap((g) => g.i), r = rota();
+  if (!todos.some((m) => m[0] === r.v) && r.v !== 'pedido') { location.hash = todos[0][0]; return; }
   const on = r.v === 'pedido' ? 'mesas' : r.v;
   let corpo = '';
-  try { corpo = ({ mesas: vMesas, pedido: vPedido, cozinha: () => vKds('cozinha'), bar: () => vKds('bar'), caixa: vCaixa, facturacao: vFact, relatorios: vRel, menu: vMenu, config: vCfg, fases: vFases })[r.v](r.id); } catch (e) { corpo = '<div class="aviso">Erro a mostrar este ecrã: ' + esc(e.message) + '</div>'; console.error(e); }
-  app.innerHTML = `<div class="topo"><a class="marca" href="#mesas" style="text-decoration:none"><img src="/icon-192.png" alt="">Mesa de Imbondeiro</a>
-    ${S.st.locais.length > 1 ? `<select id="selLocal">${S.st.locais.map((l) => `<option value="${l.id}" ${l.id === S.local ? 'selected' : ''}>${esc(l.nome)}</option>`).join('')}</select>` : ''}
-    <nav>${ms.map((m) => `<a href="#${m[0]}" class="${m[0] === on ? 'on' : ''}">${m[1]}</a>`).join('')}</nav>
-    <span id="estado" class="pill"></span><button class="eu" data-a="eu">${esc(S.user.nome.split(' ')[0])} ▾</button></div><main>${corpo}</main>`;
+  try { corpo = VIEWS[r.v](r.id); } catch (e) { corpo = '<div class="aviso">Erro a mostrar este ecrã: ' + esc(e.message) + '</div>'; console.error(e); }
+  const lado = $('.lado nav'), sc = lado ? lado.scrollTop : 0;
+  app.innerHTML = `<aside class="lado"><a class="marca" href="#${todos[0][0]}"><img src="/icon-192.png" alt=""><span>Mesa de<br>Imbondeiro</span></a>
+    ${S.st.locais.length > 1 ? `<select id="selLocal">${S.st.locais.map((l) => `<option value="${l.id}" ${l.id === S.local ? 'selected' : ''}>${esc(l.nome)}</option>`).join('')}</select>` : `<div class="loc">${esc(S.st.local.nome)}</div>`}
+    <nav>${gs.map((g) => `<h4>${g.g}</h4>${g.i.map((m) => `<a href="#${m[0]}" class="${m[0] === on ? 'on' : ''}">${m[1]}</a>`).join('')}`).join('')}</nav></aside>
+    <div class="vela" data-a="ham"></div>
+    <div class="corpo"><header class="topo"><button class="ham" data-a="ham" aria-label="Menu">☰</button><b class="tit">${esc((todos.find((m) => m[0] === on) || ['', ''])[1])}</b><span class="esp"></span><span id="estado" class="pill"></span><button class="eu" data-a="eu">${esc(S.user.nome.split(' ')[0])} ▾</button></header><main>${corpo}</main></div>`;
+  if (sc) $('.lado nav').scrollTop = sc;
   pintarEstado();
 }
 
@@ -169,32 +177,49 @@ function vLogin() {
     <button class="btn p" style="width:100%;margin-top:16px">Entrar</button></form></div>`;
 }
 
+const temQr = (p) => !!p && p.linhas.some((l) => l.estado === 'novo' && l.criado_por_nome === 'Cliente (QR)');
+function posMesa(m, i) { const e = (S.x.pos || {})[m.id]; return e || { x: m.x != null ? m.x : 14 + (i % 4) * 24, y: m.y != null ? m.y : 20 + Math.floor(i / 4) * 34, forma: m.forma || 'quadrada' }; }
+function mesa3d(m, i) {
+  const p = S.st.pedidos.find((x) => x.mesa_id === m.id), ps = posMesa(m, i), n = m.lugares || 4, f = ps.forma || 'quadrada';
+  let w = n <= 2 ? 62 : n <= 4 ? 84 : n <= 6 ? 116 : 150, h = f === 'redonda' ? w : (n > 4 || f === 'rect' ? 76 : w);
+  if (f === 'rect' && n <= 4) w = 110;
+  const cima = Math.ceil(n / 2), baixo = n - cima, cad = (k, top) => Array.from({ length: k }, (_, j) => `<i class="cad" style="left:${((j + 1) / (k + 1)) * 100}%;${top ? 'top:-13px' : 'bottom:-13px'}"></i>`).join('');
+  return `<div class="pm ${f} ${p ? 'oc' : ''} ${temQr(p) ? 'qr' : ''}" data-a="mesa" data-id="${m.id}" style="left:${ps.x}%;top:${ps.y}%;width:${w}px;height:${h}px"><i class="sombra"></i>${cad(cima, 1)}${cad(baixo, 0)}<i class="pe"></i><i class="esp1"></i><i class="esp2"></i><i class="tampo"></i><span class="tag"><b>${esc(m.nome)}</b>${p ? kz(p.total) : n + ' lug.'}${temQr(p) ? '<em>pedido do cliente</em>' : ''}</span></div>`;
+}
 function vMesas() {
   const st = S.st, zonas = [...new Set(st.mesas.map((m) => m.zona))];
+  if (!zonas.includes(S.x.zona)) S.x.zona = zonas[0];
+  const modo = S.x.modoMesas || (window.innerWidth < 760 ? 'lista' : 'planta'), ed = !!S.x.editar && modo === 'planta';
   const cartao = (m) => { const p = st.pedidos.find((x) => x.mesa_id === m.id);
-    return `<button class="mesa ${p ? 'oc' : ''}" data-a="mesa" data-id="${m.id}"><b>${esc(m.nome)}</b><span class="mudo">${p ? esc(p.aberto_por_nome) + ' · ' + mins(p.aberto_em) + ' min' : m.lugares + ' lugares · livre'}</span>${p ? `<span class="tot">${kz(p.total)}</span>` : ''}</button>`; };
-  const soltas = st.pedidos.filter((p) => !p.mesa_id);
-  return `<div class="cab"><h1>${esc(st.local.nome)}</h1><span class="esp"></span>
-    <button class="btn" data-a="nova" data-t="balcao">Nova conta de balcão</button><button class="btn" data-a="nova" data-t="takeaway">Novo take-away</button></div>
+    return `<button class="mesa ${p ? 'oc' : ''}" data-a="mesa" data-id="${m.id}"><b>${esc(m.nome)}</b><span class="mudo">${p ? esc(p.aberto_por_nome) + ' · ' + mins(p.aberto_em) + ' min' : m.lugares + ' lugares · livre'}</span>${temQr(p) ? '<span class="est novo">pedido do cliente</span>' : ''}${p ? `<span class="tot">${kz(p.total)}</span>` : ''}</button>`; };
+  const soltas = st.pedidos.filter((p) => !p.mesa_id), ocup = st.pedidos.filter((p) => p.mesa_id).length;
+  return `<div class="cab"><h1>${esc(st.local.nome)}</h1><span class="mudo">${ocup} de ${st.mesas.length} mesas ocupadas</span><span class="esp"></span>
+    <div class="seg"><button class="${modo === 'planta' ? 'on' : ''}" data-a="modoMesas" data-m="planta">Planta 3D</button><button class="${modo === 'lista' ? 'on' : ''}" data-a="modoMesas" data-m="lista">Lista</button></div>
+    ${modo === 'planta' && pode('cfg') ? (ed ? '<button class="btn p" data-a="guardarPlanta">Guardar planta</button><button class="btn" data-a="editarPlanta">Cancelar</button>' : '<button class="btn" data-a="editarPlanta">Editar planta</button>') : ''}
+    <button class="btn" data-a="nova" data-t="balcao">Conta de balcão</button><button class="btn" data-a="nova" data-t="takeaway">Take-away</button></div>
     ${!st.turno && pode('pagar') ? '<div class="aviso">A caixa está fechada. Pode registar pedidos, mas para receber pagamentos abra a caixa no menu <a href="#caixa">Caixa</a>.</div>' : ''}
+    ${ed ? '<div class="aviso">Arraste as mesas para a posição certa. Toque numa mesa sem arrastar para mudar a forma (quadrada, redonda, rectangular). No fim, guarde a planta.</div>' : ''}
     ${soltas.length ? `<h3 class="zona">Balcão e take-away</h3><div class="grelha">${soltas.map((p) => `<button class="mesa oc" data-a="abrir" data-id="${p.id}"><b>${esc(p.mesa_nome)}</b><span class="mudo">${esc(p.aberto_por_nome)} · ${hora(p.aberto_em)}</span><span class="tot">${kz(p.total)}</span></button>`).join('')}</div>` : ''}
-    ${zonas.map((z) => `<h3 class="zona">${esc(z)}</h3><div class="grelha">${st.mesas.filter((m) => m.zona === z).map(cartao).join('')}</div>`).join('')}`;
+    ${modo === 'planta' ? `<div class="chips" style="margin-top:12px">${zonas.map((z) => `<button class="chip ${z === S.x.zona ? 'on' : ''}" data-a="zona" data-id="${esc(z)}">${esc(z)}</button>`).join('')}</div>
+      <div class="planta-w"><div class="planta ${ed ? 'editar' : ''}" id="planta">${st.mesas.filter((m) => m.zona === S.x.zona).map(mesa3d).join('')}</div></div>`
+    : zonas.map((z) => `<h3 class="zona">${esc(z)}</h3><div class="grelha">${st.mesas.filter((m) => m.zona === z).map(cartao).join('')}</div>`).join('')}`;
 }
 
 function vPedido(id) {
   const st = S.st, p = P(id);
   if (!p) return `<div class="aviso">Esta conta já foi fechada.</div><a class="btn" href="#mesas">Voltar às mesas</a>`;
   if (!S.fam || !st.familias.some((f) => f.id === S.fam)) S.fam = (st.familias[0] || {}).id;
-  const novos = p.linhas.filter((l) => l.estado === 'novo').length, pg = pago(p), bruto = p.total + (p.desconto || 0);
+  const novos = p.linhas.filter((l) => l.estado === 'novo').length, pg = pago(p), bruto = p.total + (p.desconto || 0), itens = p.linhas.filter((l) => l.estado !== 'anulado').reduce((s, l) => s + l.qtd, 0);
   return `<div class="cab"><a class="btn s" href="#mesas">← Mesas</a><h1>${esc(p.mesa_nome)}</h1><span class="mudo">aberta por ${esc(p.aberto_por_nome)} às ${hora(p.aberto_em)}</span></div>
-  <div class="pedido"><div>
+  <div class="pedido ${S.x.verConta ? 'vc' : ''}"><div class="carta">
+    <input id="busca" type="search" placeholder="Procurar artigo…" value="${esc(S.x.busca || '')}" autocomplete="off" style="margin-bottom:8px">
     <div class="chips">${st.familias.map((f) => `<button class="chip ${f.id === S.fam ? 'on' : ''}" data-a="fam" data-id="${f.id}">${esc(f.nome)}</button>`).join('')}</div>
-    <div class="arts">${st.artigos.filter((a) => a.familia_id === S.fam).map((a) => `<button class="art" data-a="add" data-id="${a.id}"><b>${esc(a.nome)}</b><span>${kz(a.preco)}</span></button>`).join('') || '<p class="mudo">Sem artigos nesta família.</p>'}</div>
+    <div class="arts" id="arts">${artsHtml(p)}</div>
   </div>
   <div class="cartao conta">
     ${p.linhas.length ? p.linhas.map((l) => `<div class="lin ${l.estado}">
       ${l.estado === 'novo' ? `<div class="qt"><button data-a="menos" data-id="${l.id}">−</button><b>${l.qtd}</b><button data-a="mais" data-id="${l.id}">+</button></div>` : `<b>${l.qtd}×</b>`}
-      <div class="n">${esc(l.nome)}<small>${l.notas ? esc(l.notas) + ' · ' : ''}<span class="est ${l.estado}">${ESTADOS[l.estado]}</span></small></div>
+      <div class="n">${esc(l.nome)}<small>${l.notas ? esc(l.notas) + ' · ' : ''}<span class="est ${l.estado}">${ESTADOS[l.estado]}</span>${l.criado_por_nome === 'Cliente (QR)' && l.estado === 'novo' ? ' pedido pelo cliente' : ''}</small></div>
       <span class="v">${kz(l.preco * l.qtd)}</span>
       ${l.estado === 'novo' ? `<button class="btn s" data-a="nota" data-id="${l.id}" title="Nota para a cozinha">✎</button>` : (l.estado !== 'anulado' && pode('aprovar') ? `<button class="btn s perigo" data-a="anularL" data-id="${l.id}">Anular</button>` : '')}
     </div>`).join('') : '<p class="mudo">Toque nos artigos para os juntar à conta.</p>'}
@@ -212,7 +237,13 @@ function vPedido(id) {
       <button class="btn s" data-a="transferir" data-id="${p.id}">Mudar de mesa</button>
       ${pode('aprovar') ? `<button class="btn s" data-a="desconto" data-id="${p.id}">Desconto</button><button class="btn s perigo" data-a="anularP" data-id="${p.id}">Anular conta</button>` : ''}
     </div>
-  </div></div>`;
+  </div></div>
+  <div class="barra-m"><button class="btn" data-a="verConta">${S.x.verConta ? '← Carta' : 'Conta · ' + itens + ' · ' + kz(p.total)}</button><button class="btn p" data-a="enviar" data-id="${p.id}" ${novos ? '' : 'disabled'}>Enviar${novos ? ' (' + novos + ')' : ''}</button></div>`;
+}
+function artsHtml(p) {
+  const b = (S.x.busca || '').trim().toLowerCase(), qt = (id) => p.linhas.filter((l) => l.artigo_id === id && l.estado === 'novo').reduce((s, l) => s + l.qtd, 0);
+  const arts = S.st.artigos.filter((a) => (b ? a.nome.toLowerCase().includes(b) : a.familia_id === S.fam));
+  return arts.map((a) => { const n = qt(a.id); return `<button class="art ${n ? 'tem' : ''}" data-a="add" data-id="${a.id}">${n ? `<i>${n}</i>` : ''}<b>${esc(a.nome)}</b><span>${kz(a.preco)}</span></button>`; }).join('') || '<p class="mudo">Sem artigos.</p>';
 }
 
 function mReceber(id) {
@@ -305,9 +336,11 @@ function vRel() {
 }
 
 function vMenu() {
-  return `<div class="cab"><h1>Menu digital</h1></div><div class="aviso">Cada local tem a sua carta pública, com os preços desse local. Imprima o código QR e coloque-o nas mesas; a carta actualiza-se sozinha quando muda artigos ou preços.</div>
-    <div class="fases">${S.st.locais.map((l) => { const u = location.origin + '/menu?l=' + encodeURIComponent(l.slug);
-      return `<div class="cartao qr"><h2>${esc(l.nome)}</h2><p><img src="/api/qr?t=${encodeURIComponent(u)}" alt="Código QR"></p><p class="mudo" style="word-break:break-all">${esc(u)}</p><div class="fila" style="justify-content:center"><a class="btn" href="${esc(u)}" target="_blank" rel="noopener">Abrir menu</a><button class="btn p" data-a="impQr" data-u="${esc(u)}" data-n="${esc(l.nome)}">Imprimir QR</button></div></div>`; }).join('')}</div>`;
+  const qr = (u, n, sub) => `<div class="cartao qr"><h2>${esc(n)}</h2>${sub ? `<p class="mudo">${sub}</p>` : ''}<p><img src="/api/qr?t=${encodeURIComponent(u)}" alt="Código QR" loading="lazy"></p><div class="fila" style="justify-content:center"><a class="btn s" href="${esc(u)}" target="_blank" rel="noopener">Abrir</a><button class="btn s p" data-a="impQr" data-u="${esc(u)}" data-n="${esc(n)}">Imprimir QR</button></div></div>`;
+  const base = location.origin + '/menu?l=' + encodeURIComponent(S.st.local.slug);
+  return `<div class="cab"><h1>Menu digital</h1></div><div class="aviso">O QR do local mostra só a carta. O QR de cada mesa deixa o cliente pedir: o pedido entra na conta dessa mesa como «pedido do cliente» e só segue para a cozinha depois de o empregado o confirmar com «Enviar pedido».</div>
+    <h3 class="zona">Carta de ${esc(S.st.local.nome)}</h3><div class="fases">${qr(base, S.st.local.nome, 'Só consulta')}</div>
+    <h3 class="zona">Pedido na mesa</h3><div class="fases">${S.st.mesas.map((m) => qr(base + '&m=' + m.id, m.nome, esc(m.zona))).join('')}</div>`;
 }
 
 const CFG_TABS = [['artigos', 'Artigos e preços'], ['familias', 'Famílias'], ['mesas', 'Mesas'], ['locais', 'Locais'], ['utilizadores', 'Utilizadores'], ['empresa', 'Empresa']];
@@ -339,7 +372,7 @@ function cfgForm(id) {
     mesas: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'zona', label: 'Zona', value: r.zona || 'Sala' }, { k: 'local_id', label: 'Local', type: 'select', options: optLoc, value: r.local_id || S.local }, { k: 'lugares', label: 'Lugares', type: 'number', value: r.lugares || 4 }, { k: 'ordem', label: 'Ordem', type: 'number' }, { k: 'activo', label: 'Activa', type: 'check', value: novo ? true : r.activo }],
     locais: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'tipo', label: 'Tipo', type: 'select', options: [['restaurante', 'Restaurante'], ['bar', 'Bar'], ['esplanada', 'Esplanada'], ['takeaway', 'Take-away']] }, { k: 'morada', label: 'Morada' }, { k: 'slug', label: 'Endereço do menu (sem espaços)', ph: 'ex.: ilha-de-luanda' }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
     utilizadores: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'login', label: 'Nome de utilizador', req: 1 }, { k: 'perfil', label: 'Perfil', type: 'select', options: Object.entries(PERFIS) }, { k: 'local_id', label: 'Local', type: 'select', options: [['', 'Todos os locais']].concat(optLoc) }, { k: 'password', label: novo ? 'Palavra-passe (mín. 6 caracteres)' : 'Nova palavra-passe (vazio = manter)', type: 'password' }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
-    empresa: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'nif', label: 'NIF' }, { k: 'regime_iva', label: 'Regime de IVA', type: 'select', options: [['geral', 'Geral'], ['simplificado', 'Simplificado'], ['exclusao', 'Exclusão']] }, { k: 'taxa_iva', label: 'Taxa de IVA incluída nos preços (%) — confirme com o contabilista', type: 'number' }, { k: 'factura_software', label: 'Software de facturação certificado a ligar', ph: 'ex.: Primavera' }],
+    empresa: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'nif', label: 'NIF' }, { k: 'regime_iva', label: 'Regime de IVA', type: 'select', options: [['geral', 'Geral'], ['simplificado', 'Simplificado'], ['exclusao', 'Exclusão']] }, { k: 'taxa_iva', label: 'Taxa de IVA incluída nos preços (%) — confirme com o contabilista', type: 'number' }, { k: 'factura_software', label: 'Software de facturação certificado a ligar', ph: 'ex.: Primavera' }, { k: 'inss_taxa', label: 'Segurança Social a cargo do trabalhador (%) — confirme com o contabilista', type: 'number' }],
   }[tab].map((c) => (c.value === undefined ? Object.assign(c, { value: r[c.k] }) : c));
   form((novo && tab !== 'empresa' ? 'Novo registo' : 'Editar') + ' — ' + CFG_TABS.find((t) => t[0] === tab)[1], campos, async (v) => {
     const pl = v.preco_local; delete v.preco_local;
@@ -349,14 +382,6 @@ function cfgForm(id) {
   });
 }
 
-function vFases() {
-  const f = [['Fase 2 · Controlar custos', 'Fichas técnicas e custo por prato', 'Receitas com rendimento; a margem de cada prato fica à vista quando o custo de um ingrediente muda.'], ['Fase 2 · Controlar custos', 'Stock', 'Baixa automática por venda, contagens, quebras, validades e transferências entre locais.'], ['Fase 2 · Controlar custos', 'Compras e fornecedores', 'Requisições, encomendas, recepção, conferência de facturas e conta-corrente de cada fornecedor.'],
-    ['Fase 3 · Pessoas e dinheiro', 'Recursos humanos', 'Escalas, ponto, férias e faltas, gorjetas e processamento salarial sincronizado com o software oficial.'], ['Fase 3 · Pessoas e dinheiro', 'DAF', 'Contas a pagar e a receber, bancos, despesas, centros de custo por local e exportação para a contabilidade.'],
-    ['Fase 4 · Crescer', 'Reservas e clientes', 'Reservas, lista de espera, eventos, fidelização e conta-corrente de clientes empresa.'], ['Fase 4 · Crescer', 'Pedido pelo cliente por QR', 'O cliente pede na mesa a partir do menu digital; o pedido cai directamente na cozinha.'], ['Fase 4 · Crescer', 'Alertas e consolidado do grupo', 'Anulações e descontos fora do normal, rupturas e um painel único com todos os locais.']];
-  return `<div class="cab"><h1>Próximas fases</h1></div><div class="aviso">Esta versão cobre as fases 0 e 1 do mapa do projecto: configuração, menus e preços, vendas, cozinha e bar, caixa, fila de facturação e menu digital. O que se segue ainda não está construído.</div>
-    <div class="fases">${f.map((x) => `<div class="cartao"><span class="est">${x[0]}</span><h2 style="margin:8px 0 4px">${x[1]}</h2><p class="mudo" style="margin:0">${x[2]}</p></div>`).join('')}</div>`;
-}
-
 /* ---------- Acções ---------- */
 const ACOES = {
   fechar: () => { fechar(); },
@@ -364,16 +389,23 @@ const ACOES = {
   eu: () => modal(`<h2>${esc(S.user.nome)}</h2><p class="mudo">${PERFIS[S.user.perfil]} · utilizador «${esc(S.user.login)}»</p><div class="fila" style="margin-top:14px"><button class="btn" data-a="mudarPass">Alterar palavra-passe</button><span class="esp"></span><button class="btn" data-a="fechar">Fechar</button><button class="btn perigo" data-a="sair">Sair</button></div>`),
   sair: () => { if (S.queue.length && !confirm('Há ' + S.queue.length + ' operação(ões) por sincronizar. Se sair agora perdem-se. Sair mesmo assim?')) return; S.queue = []; ls.del('queue'); fechar(); sair(); },
   mudarPass: () => form('Alterar palavra-passe', [{ k: 'actual', label: 'Palavra-passe actual', type: 'password', req: 1 }, { k: 'nova', label: 'Nova palavra-passe (mín. 6 caracteres)', type: 'password', req: 1 }], async (v) => { await api('password', { method: 'POST', body: v }); toast('Palavra-passe alterada'); }),
-  mesa: (el) => { const p = S.st.pedidos.find((x) => x.mesa_id === el.dataset.id); if (p) return ir('pedido/' + p.id); if (!pode('pedir')) return; const id = uuid(); if (op('pedido.abrir', { id, local_id: S.local, mesa_id: el.dataset.id })) ir('pedido/' + id); },
+  mesa: (el) => { if (S.x.editar) return; S.x.verConta = false; S.x.busca = ''; const p = S.st.pedidos.find((x) => x.mesa_id === el.dataset.id); if (p) return ir('pedido/' + p.id); if (!pode('pedir')) return; const id = uuid(); if (op('pedido.abrir', { id, local_id: S.local, mesa_id: el.dataset.id })) ir('pedido/' + id); },
   nova: (el) => { const id = uuid(); if (op('pedido.abrir', { id, local_id: S.local, tipo: el.dataset.t })) ir('pedido/' + id); },
   abrir: (el) => ir('pedido/' + el.dataset.id),
-  fam: (el) => { S.fam = el.dataset.id; render(); },
+  fam: (el) => { S.fam = el.dataset.id; S.x.busca = ''; render(); },
+  ham: () => document.body.classList.toggle('menu-on'),
+  verConta: () => { S.x.verConta = !S.x.verConta; render(); window.scrollTo(0, 0); },
+  modoMesas: (el) => { S.x.modoMesas = el.dataset.m; S.x.editar = false; render(); },
+  zona: (el) => { S.x.zona = el.dataset.id; render(); },
+  editarPlanta: () => { S.x.editar = !S.x.editar; S.x.pos = {}; render(); },
+  guardarPlanta: async () => { const ms = S.st.mesas.map((m) => Object.assign({ id: m.id }, posMesa(m, S.st.mesas.filter((y) => y.zona === m.zona).indexOf(m))));
+    try { await api('planta', { method: 'POST', body: { mesas: ms } }); ms.forEach((x) => { const m = S.st.mesas.find((y) => y.id === x.id); m.x = x.x; m.y = x.y; m.forma = x.forma; }); S.x.editar = false; S.x.pos = {}; guardar(); toast('Planta guardada'); render(); } catch (e) { toast(e.message, 'erro'); } },
   add: (el) => { const p = P(rota().id); if (!p) return; const l = p.linhas.find((x) => x.artigo_id === el.dataset.id && x.estado === 'novo' && !x.notas); if (l) op('linha.qtd', { id: l.id, qtd: l.qtd + 1 }); else op('linha.add', { id: uuid(), pedido_id: p.id, artigo_id: el.dataset.id, qtd: 1 }); render(); },
   mais: (el) => { const [, l] = linhaDe(el.dataset.id); if (l) { op('linha.qtd', { id: l.id, qtd: l.qtd + 1 }); render(); } },
   menos: (el) => { const [, l] = linhaDe(el.dataset.id); if (l) { op('linha.qtd', { id: l.id, qtd: l.qtd - 1 }); render(); } },
   nota: (el) => { const [, l] = linhaDe(el.dataset.id); if (l) form('Nota para ' + l.nome, [{ k: 'notas', label: 'Nota (ex.: sem jindungo, mal passado)', value: l.notas }], (v) => { op('linha.qtd', { id: l.id, qtd: l.qtd, notas: v.notas }); render(); }); },
   anularL: (el) => form('Anular linha', [{ k: 'motivo', label: 'Motivo', req: 1 }], (v) => { op('linha.anular', { id: el.dataset.id, motivo: v.motivo }); render(); }),
-  enviar: (el) => { if (op('pedido.enviar', { pedido_id: el.dataset.id })) { toast('Pedido enviado'); render(); } },
+  enviar: (el) => { if (op('pedido.enviar', { pedido_id: el.dataset.id })) { toast('Pedido enviado'); S.x.verConta = false; render(); } },
   desconto: (el) => { const p = P(el.dataset.id); form('Desconto na conta', [{ k: 'valor', label: 'Valor do desconto (Kz)', type: 'number', value: p.desconto || '' }], (v) => { op('pedido.desconto', { pedido_id: p.id, valor: Math.max(0, Number(v.valor) || 0) }); render(); }); },
   transferir: (el) => { const livres = S.st.mesas.filter((m) => !S.st.pedidos.some((p) => p.mesa_id === m.id)); if (!livres.length) return toast('Não há mesas livres', 'erro'); form('Mudar de mesa', [{ k: 'mesa_id', label: 'Nova mesa', type: 'select', options: livres.map((m) => [m.id, m.zona + ' — ' + m.nome]) }], (v) => { op('pedido.transferir', { pedido_id: el.dataset.id, mesa_id: v.mesa_id }); render(); }); },
   anularP: (el) => form('Anular conta', [{ k: 'motivo', label: 'Motivo', req: 1 }], (v) => { if (P(el.dataset.id).pagamentos.length) { toast('Remova os pagamentos antes de anular a conta', 'erro'); return false; } op('pedido.anular', { pedido_id: el.dataset.id, motivo: v.motivo }); ir('mesas'); }),
@@ -419,10 +451,20 @@ document.addEventListener('submit', async (e) => {
   } catch (er) { toast(er.message, 'erro'); }
 });
 document.addEventListener('change', (e) => { if (e.target.id === 'selLocal') { if (S.queue.length) { toast('Aguarde a sincronização antes de mudar de local', 'erro'); e.target.value = S.local; return; } S.local = e.target.value; S.x = {}; S.st = null; guardar(); render(); sync(); } });
-window.addEventListener('hashchange', () => { fechar(); const v = rota().v; ({ caixa: 'caixa', facturacao: 'fact', relatorios: 'rel', config: 'cfg' })[v] && delete S.x[({ caixa: 'caixa', facturacao: 'fact', relatorios: 'rel', config: 'cfg' })[v]]; render(); });
+window.addEventListener('hashchange', () => { fechar(); document.body.classList.remove('menu-on'); Object.keys(S.x).forEach((k) => { if (S.x[k] && typeof S.x[k] === 'object' && 'pronto' in S.x[k]) delete S.x[k]; }); render(); });
+document.addEventListener('input', (e) => { if (e.target.id === 'busca') { S.x.busca = e.target.value; const p = P(rota().id); if (p) $('#arts').innerHTML = artsHtml(p); } });
+/* Arrastar mesas na planta (modo de edição) */
+let arr = null;
+document.addEventListener('pointerdown', (e) => { const el = e.target.closest('.planta.editar .pm'); if (!el) return; e.preventDefault(); arr = { el, id: el.dataset.id, x0: e.clientX, y0: e.clientY, mexeu: false }; });
+document.addEventListener('pointermove', (e) => { if (!arr) return; if (Math.abs(e.clientX - arr.x0) + Math.abs(e.clientY - arr.y0) > 5) arr.mexeu = true; if (!arr.mexeu) return;
+  const r = $('#planta').getBoundingClientRect(); arr.x = Math.min(96, Math.max(4, ((e.clientX - r.left) / r.width) * 100)); arr.y = Math.min(94, Math.max(6, ((e.clientY - r.top) / r.height) * 100)); arr.el.style.left = arr.x + '%'; arr.el.style.top = arr.y + '%'; });
+document.addEventListener('pointerup', () => { if (!arr) return; const i = S.st.mesas.filter((m) => m.zona === S.x.zona).findIndex((m) => m.id === arr.id), m = S.st.mesas.find((x) => x.id === arr.id), ps = Object.assign({}, posMesa(m, i));
+  if (arr.mexeu) { ps.x = Math.round(arr.x * 10) / 10; ps.y = Math.round(arr.y * 10) / 10; } else ps.forma = { quadrada: 'redonda', redonda: 'rect', rect: 'quadrada' }[ps.forma || 'quadrada'];
+  (S.x.pos = S.x.pos || {})[arr.id] = ps; arr = null; render(); });
 window.addEventListener('online', () => { sync(); });
 window.addEventListener('offline', () => { S.online = false; pintarEstado(); });
 setInterval(() => { if (!document.hidden) sync(); }, 6000);
-setInterval(() => { if (S.token && S.st && ['cozinha', 'bar', 'mesas'].includes(rota().v) && !$('#modal').classList.contains('on')) render(); }, 30000);
+setInterval(() => { if (S.token && S.st && ['cozinha', 'bar', 'mesas'].includes(rota().v) && !S.x.editar && !$('#modal').classList.contains('on')) render(); }, 30000);
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
-render(); sync();
+Object.assign(VIEWS, { mesas: vMesas, pedido: vPedido, cozinha: () => vKds('cozinha'), bar: () => vKds('bar'), caixa: vCaixa, facturacao: vFact, relatorios: vRel, menu: vMenu, config: vCfg });
+function boot() { render(); sync(); }
