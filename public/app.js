@@ -180,22 +180,31 @@ function vLogin() {
 
 const temQr = (p) => !!p && p.linhas.some((l) => l.estado === 'novo' && l.criado_por_nome === 'Cliente (QR)');
 function posMesa(m, i) { const e = (S.x.pos || {})[m.id]; return e || { x: m.x != null ? m.x : 14 + (i % 4) * 24, y: m.y != null ? m.y : 20 + Math.floor(i / 4) * 34, forma: m.forma || 'quadrada' }; }
+/* Cor da mesa pela espera: conta desde o envio mais antigo que a cozinha ou o bar ainda não deram como pronto. */
+function corMesa(p) {
+  if (!p) return { cls: '', min: null };
+  const pend = p.linhas.filter((l) => l.estado === 'enviado' || l.estado === 'preparar');
+  if (!pend.length) return { cls: 'verde', min: null };
+  const min = mins(pend.reduce((a, l) => { const t = l.enviado_em || l.criado_em; return t < a ? t : a; }, pend[0].enviado_em || pend[0].criado_em));
+  return { cls: min >= 30 ? 'vermelho' : min >= 10 ? 'amarelo' : 'verde', min };
+}
+const esperaTxt = (c) => (c.min != null ? `<small class="esp-t">à espera há ${c.min} min</small>` : '');
 const filhas = (m) => S.st.mesas.filter((x) => x.junta_a === m.id);
 const mesasVis = () => S.st.mesas.filter((m) => !m.junta_a || !S.st.mesas.some((x) => x.id === m.junta_a));
 const lug = (m) => (m.lugares || 4) + filhas(m).reduce((s, x) => s + (x.lugares || 0), 0);
 function mesa3d(m, i) {
-  const p = S.st.pedidos.find((x) => x.mesa_id === m.id), ps = posMesa(m, i), fl = filhas(m), n = lug(m), f = fl.length ? 'rect' : ps.forma || 'quadrada';
+  const p = S.st.pedidos.find((x) => x.mesa_id === m.id), cm = corMesa(p), ps = posMesa(m, i), fl = filhas(m), n = lug(m), f = fl.length ? 'rect' : ps.forma || 'quadrada';
   let w = n <= 2 ? 62 : n <= 4 ? 84 : n <= 6 ? 116 : n <= 8 ? 150 : n <= 12 ? 200 : 250, h = f === 'redonda' ? w : (n > 4 || f === 'rect' ? 76 : w);
   if (f === 'rect' && n <= 4) w = 110;
   const cima = Math.ceil(n / 2), baixo = n - cima, cad = (k, top) => Array.from({ length: k }, (_, j) => `<i class="cad" style="left:${((j + 1) / (k + 1)) * 100}%;${top ? 'top:-13px' : 'bottom:-13px'}"></i>`).join('');
-  return `<div class="pm ${f} ${p ? 'oc' : ''} ${temQr(p) ? 'qr' : ''} ${(S.x.sel || []).includes(m.id) ? 'sel' : ''}" data-a="mesa" data-id="${m.id}" style="left:${ps.x}%;top:${ps.y}%;width:${w}px;height:${h}px"><i class="sombra"></i>${cad(cima, 1)}${cad(baixo, 0)}<i class="pe"></i><i class="esp1"></i><i class="esp2"></i><i class="tampo"></i><span class="tag"><b>${esc(m.nome)}</b>${p ? kz(p.total) : n + ' lug.'}${fl.length ? `<small>${fl.length + 1} mesas juntas</small>` : ''}${temQr(p) ? '<em>pedido do cliente</em>' : ''}</span></div>`;
+  return `<div class="pm ${f} ${p ? 'oc ' + cm.cls : ''} ${temQr(p) ? 'qr' : ''} ${(S.x.sel || []).includes(m.id) ? 'sel' : ''}" data-a="mesa" data-id="${m.id}" style="left:${ps.x}%;top:${ps.y}%;width:${w}px;height:${h}px"><i class="sombra"></i>${cad(cima, 1)}${cad(baixo, 0)}<i class="pe"></i><i class="esp1"></i><i class="esp2"></i><i class="tampo"></i><span class="tag"><b>${esc(m.nome)}</b>${p ? kz(p.total) : n + ' lug.'}${esperaTxt(cm)}${fl.length ? `<small>${fl.length + 1} mesas juntas</small>` : ''}${temQr(p) ? '<em>pedido do cliente</em>' : ''}</span></div>`;
 }
 function vMesas() {
   const st = S.st, vis = mesasVis(), zonas = [...new Set(vis.map((m) => m.zona))], nSel = (S.x.sel || []).length;
   if (!zonas.includes(S.x.zona)) S.x.zona = zonas[0];
   const modo = S.x.modoMesas || (window.innerWidth < 760 ? 'lista' : 'planta'), ed = !!S.x.editar && modo === 'planta';
-  const cartao = (m) => { const p = st.pedidos.find((x) => x.mesa_id === m.id);
-    return `<button class="mesa ${p ? 'oc' : ''}" data-a="mesa" data-id="${m.id}"><b>${esc(m.nome)}</b><span class="mudo">${p ? esc(p.aberto_por_nome) + ' · ' + mins(p.aberto_em) + ' min' : lug(m) + ' lugares · livre'}${filhas(m).length ? ' · ' + (filhas(m).length + 1) + ' mesas juntas' : ''}</span>${temQr(p) ? '<span class="est novo">pedido do cliente</span>' : ''}${p ? `<span class="tot">${kz(p.total)}</span>` : ''}</button>`; };
+  const cartao = (m) => { const p = st.pedidos.find((x) => x.mesa_id === m.id), cm = corMesa(p);
+    return `<button class="mesa ${p ? 'oc ' + cm.cls : ''}" data-a="mesa" data-id="${m.id}"><b>${esc(m.nome)}</b><span class="mudo">${p ? esc(p.aberto_por_nome) + ' · ' + mins(p.aberto_em) + ' min' : lug(m) + ' lugares · livre'}${filhas(m).length ? ' · ' + (filhas(m).length + 1) + ' mesas juntas' : ''}</span>${esperaTxt(cm)}${temQr(p) ? '<span class="est novo">pedido do cliente</span>' : ''}${p ? `<span class="tot">${kz(p.total)}</span>` : ''}</button>`; };
   const soltas = st.pedidos.filter((p) => !p.mesa_id), ocup = st.pedidos.filter((p) => p.mesa_id).length;
   return `<div class="cab"><h1>${esc(st.local.nome)}</h1><span class="mudo">${ocup} de ${vis.length} mesas ocupadas</span><span class="esp"></span>
     <div class="seg"><button class="${modo === 'planta' ? 'on' : ''}" data-a="modoMesas" data-m="planta">Planta 3D</button><button class="${modo === 'lista' ? 'on' : ''}" data-a="modoMesas" data-m="lista">Lista</button></div>
@@ -204,7 +213,8 @@ function vMesas() {
     ${!st.turno && pode('pagar') ? '<div class="aviso">A caixa está fechada. Pode registar pedidos, mas para receber pagamentos abra a caixa no menu <a href="#caixa">Caixa</a>.</div>' : ''}
     ${ed ? `<div class="aviso ferr"><div><b>Mover:</b> arraste cada mesa para o sítio. <b>Juntar:</b> toque nas mesas a juntar (a primeira fica com o número activo) e escolha «Juntar». As outras deixam de aparecer e a conta passa a ser uma só.</div>
       <div class="fila" style="margin-top:10px"><button class="btn p" data-a="juntarMesas" ${nSel >= 2 ? '' : 'disabled'}>Juntar${nSel >= 2 ? ' ' + nSel + ' mesas' : ''}</button><button class="btn" data-a="separarMesas" ${nSel ? '' : 'disabled'}>Separar</button><button class="btn" data-a="formaMesas" ${nSel ? '' : 'disabled'}>Mudar forma</button><span class="esp"></span><button class="btn p" data-a="guardarPlanta">Guardar posições</button><button class="btn" data-a="editarPlanta">Fechar</button></div></div>` : ''}
-    ${soltas.length ? `<h3 class="zona">Balcão e take-away</h3><div class="grelha">${soltas.map((p) => `<button class="mesa oc" data-a="abrir" data-id="${p.id}"><b>${esc(p.mesa_nome)}</b><span class="mudo">${esc(p.aberto_por_nome)} · ${hora(p.aberto_em)}</span><span class="tot">${kz(p.total)}</span></button>`).join('')}</div>` : ''}
+    ${soltas.length ? `<h3 class="zona">Balcão e take-away</h3><div class="grelha">${soltas.map((p) => `<button class="mesa oc ${corMesa(p).cls}" data-a="abrir" data-id="${p.id}"><b>${esc(p.mesa_nome)}</b><span class="mudo">${esc(p.aberto_por_nome)} · ${hora(p.aberto_em)}</span>${esperaTxt(corMesa(p))}<span class="tot">${kz(p.total)}</span></button>`).join('')}</div>` : ''}
+    <div class="legenda"><span><i class="l0"></i>Livre</span><span><i class="l1"></i>Ocupada, pedido em dia</span><span><i class="l2"></i>À espera há 10 min ou mais</span><span><i class="l3"></i>À espera há 30 min ou mais</span><span class="mudo">A espera pára quando a cozinha ou o bar dão o pedido como pronto.</span></div>
     ${modo === 'planta' ? `<div class="chips" style="margin-top:12px">${zonas.map((z) => `<button class="chip ${z === S.x.zona ? 'on' : ''}" data-a="zona" data-id="${esc(z)}">${esc(z)}</button>`).join('')}</div>
       <div class="planta-w"><div class="planta ${ed ? 'editar' : ''}" id="planta">${vis.filter((m) => m.zona === S.x.zona).map(mesa3d).join('')}</div></div>`
     : zonas.map((z) => `<h3 class="zona">${esc(z)}</h3><div class="grelha">${vis.filter((m) => m.zona === z).map(cartao).join('')}</div>`).join('')}`;
