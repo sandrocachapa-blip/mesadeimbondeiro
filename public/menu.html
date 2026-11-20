@@ -24,6 +24,11 @@
   .ok { background: #E4EFDD; border-left: 5px solid #4F7A3A; border-radius: 8px; padding: 10px 14px; margin: 12px 0; } .ok.erro { background: #FBE9DF; border-color: #B03F1B; }
   #cesto { display: none; position: fixed; left: 0; right: 0; bottom: 0; background: #4A1A0C; color: #FAF3E8; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); align-items: center; justify-content: space-between; gap: 12px; font-weight: 700; box-shadow: 0 -8px 24px rgba(0,0,0,.3); }
   #cesto button { border: 0; border-radius: 12px; background: #CC5A31; color: #fff; font: inherit; padding: 12px 18px; box-shadow: 0 3px 0 #7A2A10; }
+  .bres { border: 0; border-radius: 12px; background: #B03F1B; color: #fff; font: 700 16px system-ui, sans-serif; padding: 12px 22px; box-shadow: 0 3px 0 #7A2A10; cursor: pointer; }
+  #fRes { background: #FFFDF9; border: 1.5px solid #E2CFB2; border-radius: 14px; padding: 6px 16px 10px; margin: 10px 0; }
+  #fRes label { display: block; font-size: 13px; font-weight: 600; color: #6B3A26; margin-top: 10px; }
+  #fRes input { display: block; width: 100%; box-sizing: border-box; font: 16px system-ui, sans-serif; padding: 10px 12px; border: 1.5px solid #E2CFB2; border-radius: 10px; margin-top: 4px; background: #fff; color: #4A1A0C; }
+  .dois { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   footer { text-align: center; color: #6B3A26; font-size: 13px; margin-top: 30px; }
 </style>
 </head>
@@ -31,6 +36,17 @@
 <div class="w">
   <header><img src="/logo.png" alt="Mesa de Imbondeiro"><p id="local"></p></header>
   <nav id="nav"></nav>
+  <div style="text-align:center;margin:10px 0 4px"><button id="btRes" class="bres">Reservar mesa</button></div>
+  <form id="fRes" style="display:none">
+    <h2 style="margin-top:8px">Reservar mesa</h2>
+    <label>Nome<input name="nome" required maxlength="80" autocomplete="name"></label>
+    <label>Telefone<input name="telefone" required type="tel" maxlength="30" autocomplete="tel"></label>
+    <div class="dois"><label>Dia<input name="dia" type="date" required></label><label>Hora<input name="hora" type="time" required value="20:00"></label></div>
+    <label>Número de pessoas<input name="pessoas" type="number" min="1" max="40" value="2" required></label>
+    <label>Notas (opcional)<input name="notas" maxlength="200" placeholder="Aniversário, alergias, cadeira de bebé…"></label>
+    <button class="bres" style="width:100%;margin-top:12px">Pedir reserva</button>
+    <p style="font-size:13px;color:#6B3A26;text-align:center">A reserva só fica garantida depois de o restaurante a confirmar.</p>
+  </form>
   <div id="msg"></div>
   <div id="menu"><p style="text-align:center">A carregar o menu…</p></div>
   <footer>Preços em kwanzas, com impostos incluídos.</footer>
@@ -62,6 +78,19 @@ document.addEventListener('click', async (e) => {
     e.target.disabled = false;
   }
 });
+const fRes = el('fRes'), hojeL = new Date(Date.now() + 3600e3).toISOString().slice(0, 10);
+fRes.dia.min = hojeL; fRes.dia.value = hojeL;
+const abreRes = () => { fRes.style.display = 'block'; el('btRes').style.display = 'none'; fRes.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+el('btRes').onclick = abreRes; if (location.hash === '#reservar') abreRes();
+fRes.onsubmit = async (e) => {
+  e.preventDefault(); const bt = fRes.querySelector('button'); bt.disabled = true;
+  try {
+    const r = await fetch('/api/reserva-publica', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ l, nome: fRes.nome.value, telefone: fRes.telefone.value, dia: fRes.dia.value, hora: fRes.hora.value, pessoas: fRes.pessoas.value, notas: fRes.notas.value }) });
+    const j = await r.json(); if (!r.ok) throw new Error(j.erro || 'Não foi possível enviar o pedido');
+    fRes.style.display = 'none'; el('msg').innerHTML = '<div class="ok"><b>Pedido de reserva recebido.</b><br>' + esc(j.local) + ' vai confirmar consigo pelo telefone que indicou.</div>'; window.scrollTo(0, 0);
+  } catch (er) { el('msg').innerHTML = '<div class="ok erro">' + esc(er.message) + '</div>'; }
+  bt.disabled = false;
+};
 fetch('/api/menu?l=' + encodeURIComponent(l) + (mesaId ? '&m=' + encodeURIComponent(mesaId) : '')).then((r) => r.json()).then((m) => {
   if (m.erro) throw new Error(m.erro);
   M = m;

@@ -188,6 +188,15 @@ function corMesa(p) {
   const min = mins(pend.reduce((a, l) => { const t = l.enviado_em || l.criado_em; return t < a ? t : a; }, pend[0].enviado_em || pend[0].criado_em));
   return { cls: min >= 30 ? 'vermelho' : min >= 10 ? 'amarelo' : 'verde', min };
 }
+/* Reserva de hoje ligada a uma mesa (ou a uma das mesas juntas a ela) */
+function resMesa(m) { const ids = [m.id].concat(S.st.mesas.filter((x) => x.junta_a === m.id).map((x) => x.id)); return (S.st.reservas || []).filter((r) => ids.includes(r.mesa_id)).sort((a, b) => (a.hora < b.hora ? -1 : 1))[0] || null; }
+const resTxt = (r) => (r ? `<small class="res-t">reservada ${esc(r.hora)} · ${esc(r.cliente_nome)}</small>` : '');
+function mReserva(mesaId, r) {
+  r = r || {}; const livres = mesasVis();
+  form(r.id ? 'Reserva — ' + r.cliente_nome : 'Nova reserva', [{ k: 'cliente_nome', label: 'Nome do cliente', req: 1, value: r.cliente_nome }, { k: 'telefone', label: 'Telefone', value: r.telefone }, { k: 'dia', label: 'Dia', type: 'date', value: r.dia || hojeLuanda(), req: 1 }, { k: 'hora', label: 'Hora', type: 'time', value: r.hora || '20:00', req: 1 }, { k: 'pessoas', label: 'N.º de pessoas', type: 'number', value: r.pessoas || 2 },
+    { k: 'mesa_id', label: 'Mesa', type: 'select', options: [['', 'A definir']].concat(livres.map((m) => [m.id, m.zona + ' — ' + m.nome + ' (' + lug(m) + ' lug.)'])), value: r.mesa_id || mesaId || '' }, { k: 'notas', label: 'Notas (aniversário, alergias, cadeira de bebé…)', value: r.notas }],
+  async (v) => { await api('reg', { method: 'POST', body: { entidade: 'reservas', linha: Object.assign({ id: r.id, local_id: S.local, estado: r.id && r.estado !== 'pendente' ? r.estado : 'confirmada' }, v) } }); toast('Reserva guardada'); await sync(); render(); });
+}
 const esperaTxt = (c) => (c.min != null ? `<small class="esp-t">à espera há ${c.min} min</small>` : '');
 const filhas = (m) => S.st.mesas.filter((x) => x.junta_a === m.id);
 const mesasVis = () => S.st.mesas.filter((m) => !m.junta_a || !S.st.mesas.some((x) => x.id === m.junta_a));
@@ -197,24 +206,26 @@ function mesa3d(m, i) {
   let w = n <= 2 ? 62 : n <= 4 ? 84 : n <= 6 ? 116 : n <= 8 ? 150 : n <= 12 ? 200 : 250, h = f === 'redonda' ? w : (n > 4 || f === 'rect' ? 76 : w);
   if (f === 'rect' && n <= 4) w = 110;
   const cima = Math.ceil(n / 2), baixo = n - cima, cad = (k, top) => Array.from({ length: k }, (_, j) => `<i class="cad" style="left:${((j + 1) / (k + 1)) * 100}%;${top ? 'top:-13px' : 'bottom:-13px'}"></i>`).join('');
-  return `<div class="pm ${f} ${p ? 'oc ' + cm.cls : ''} ${temQr(p) ? 'qr' : ''} ${(S.x.sel || []).includes(m.id) ? 'sel' : ''}" data-a="mesa" data-id="${m.id}" style="left:${ps.x}%;top:${ps.y}%;width:${w}px;height:${h}px"><i class="sombra"></i>${cad(cima, 1)}${cad(baixo, 0)}<i class="pe"></i><i class="esp1"></i><i class="esp2"></i><i class="tampo"></i><span class="tag"><b>${esc(m.nome)}</b>${p ? kz(p.total) : n + ' lug.'}${esperaTxt(cm)}${fl.length ? `<small>${fl.length + 1} mesas juntas</small>` : ''}${temQr(p) ? '<em>pedido do cliente</em>' : ''}</span></div>`;
+  const rs = p ? null : resMesa(m);
+  return `<div class="pm ${f} ${rs ? 'res' : ''} ${p ? 'oc ' + cm.cls : ''} ${temQr(p) ? 'qr' : ''} ${(S.x.sel || []).includes(m.id) ? 'sel' : ''}" data-a="mesa" data-id="${m.id}" style="left:${ps.x}%;top:${ps.y}%;width:${w}px;height:${h}px"><i class="sombra"></i>${cad(cima, 1)}${cad(baixo, 0)}<i class="pe"></i><i class="esp1"></i><i class="esp2"></i><i class="tampo"></i><span class="tag"><b>${esc(m.nome)}</b>${p ? kz(p.total) : n + ' lug.'}${esperaTxt(cm)}${resTxt(rs)}${fl.length ? `<small>${fl.length + 1} mesas juntas</small>` : ''}${temQr(p) ? '<em>pedido do cliente</em>' : ''}</span></div>`;
 }
 function vMesas() {
   const st = S.st, vis = mesasVis(), zonas = [...new Set(vis.map((m) => m.zona))], nSel = (S.x.sel || []).length;
   if (!zonas.includes(S.x.zona)) S.x.zona = zonas[0];
   const modo = S.x.modoMesas || (window.innerWidth < 760 ? 'lista' : 'planta'), ed = !!S.x.editar && modo === 'planta';
   const cartao = (m) => { const p = st.pedidos.find((x) => x.mesa_id === m.id), cm = corMesa(p);
-    return `<button class="mesa ${p ? 'oc ' + cm.cls : ''}" data-a="mesa" data-id="${m.id}"><b>${esc(m.nome)}</b><span class="mudo">${p ? esc(p.aberto_por_nome) + ' · ' + mins(p.aberto_em) + ' min' : lug(m) + ' lugares · livre'}${filhas(m).length ? ' · ' + (filhas(m).length + 1) + ' mesas juntas' : ''}</span>${esperaTxt(cm)}${temQr(p) ? '<span class="est novo">pedido do cliente</span>' : ''}${p ? `<span class="tot">${kz(p.total)}</span>` : ''}</button>`; };
+    return `<button class="mesa ${!p && resMesa(m) ? 'res' : ''} ${p ? 'oc ' + cm.cls : ''}" data-a="mesa" data-id="${m.id}"><b>${esc(m.nome)}</b><span class="mudo">${p ? esc(p.aberto_por_nome) + ' · ' + mins(p.aberto_em) + ' min' : lug(m) + ' lugares · livre'}${filhas(m).length ? ' · ' + (filhas(m).length + 1) + ' mesas juntas' : ''}</span>${esperaTxt(cm)}${p ? '' : resTxt(resMesa(m))}${temQr(p) ? '<span class="est novo">pedido do cliente</span>' : ''}${p ? `<span class="tot">${kz(p.total)}</span>` : ''}</button>`; };
   const soltas = st.pedidos.filter((p) => !p.mesa_id), ocup = st.pedidos.filter((p) => p.mesa_id).length;
   return `<div class="cab"><h1>${esc(st.local.nome)}</h1><span class="mudo">${ocup} de ${vis.length} mesas ocupadas</span><span class="esp"></span>
     <div class="seg"><button class="${modo === 'planta' ? 'on' : ''}" data-a="modoMesas" data-m="planta">Planta 3D</button><button class="${modo === 'lista' ? 'on' : ''}" data-a="modoMesas" data-m="lista">Lista</button></div>
     ${modo === 'planta' && pode('cfg') ? (ed ? '' : '<button class="btn p" data-a="editarPlanta">Mover e juntar mesas</button>') : ''}
-    <button class="btn" data-a="nova" data-t="balcao">Conta de balcão</button><button class="btn" data-a="nova" data-t="takeaway">Take-away</button></div>
+    <button class="btn" data-a="reservar">Reservar mesa</button><button class="btn" data-a="nova" data-t="balcao">Conta de balcão</button><button class="btn" data-a="nova" data-t="takeaway">Take-away</button></div>
+    ${(st.reservas || []).some((r) => r.estado === 'pendente') ? `<div class="aviso">Há ${st.reservas.filter((r) => r.estado === 'pendente').length} pedido(s) de reserva para hoje por confirmar. <a href="#reservas">Ver reservas</a></div>` : ''}
     ${!st.turno && pode('pagar') ? '<div class="aviso">A caixa está fechada. Pode registar pedidos, mas para receber pagamentos abra a caixa no menu <a href="#caixa">Caixa</a>.</div>' : ''}
     ${ed ? `<div class="aviso ferr"><div><b>Mover:</b> arraste cada mesa para o sítio. <b>Juntar:</b> toque nas mesas a juntar (a primeira fica com o número activo) e escolha «Juntar». As outras deixam de aparecer e a conta passa a ser uma só.</div>
       <div class="fila" style="margin-top:10px"><button class="btn p" data-a="juntarMesas" ${nSel >= 2 ? '' : 'disabled'}>Juntar${nSel >= 2 ? ' ' + nSel + ' mesas' : ''}</button><button class="btn" data-a="separarMesas" ${nSel ? '' : 'disabled'}>Separar</button><button class="btn" data-a="formaMesas" ${nSel ? '' : 'disabled'}>Mudar forma</button><span class="esp"></span><button class="btn p" data-a="guardarPlanta">Guardar posições</button><button class="btn" data-a="editarPlanta">Fechar</button></div></div>` : ''}
     ${soltas.length ? `<h3 class="zona">Balcão e take-away</h3><div class="grelha">${soltas.map((p) => `<button class="mesa oc ${corMesa(p).cls}" data-a="abrir" data-id="${p.id}"><b>${esc(p.mesa_nome)}</b><span class="mudo">${esc(p.aberto_por_nome)} · ${hora(p.aberto_em)}</span>${esperaTxt(corMesa(p))}<span class="tot">${kz(p.total)}</span></button>`).join('')}</div>` : ''}
-    <div class="legenda"><span><i class="l0"></i>Livre</span><span><i class="l1"></i>Ocupada, pedido em dia</span><span><i class="l2"></i>À espera há 10 min ou mais</span><span><i class="l3"></i>À espera há 30 min ou mais</span><span class="mudo">A espera pára quando a cozinha ou o bar dão o pedido como pronto.</span></div>
+    <div class="legenda"><span><i class="l0"></i>Livre</span><span><i class="l4"></i>Reservada hoje</span><span><i class="l1"></i>Ocupada, pedido em dia</span><span><i class="l2"></i>À espera há 10 min ou mais</span><span><i class="l3"></i>À espera há 30 min ou mais</span><span class="mudo">A espera pára quando a cozinha ou o bar dão o pedido como pronto.</span></div>
     ${modo === 'planta' ? `<div class="chips" style="margin-top:12px">${zonas.map((z) => `<button class="chip ${z === S.x.zona ? 'on' : ''}" data-a="zona" data-id="${esc(z)}">${esc(z)}</button>`).join('')}</div>
       <div class="planta-w"><div class="planta ${ed ? 'editar' : ''}" id="planta">${vis.filter((m) => m.zona === S.x.zona).map(mesa3d).join('')}</div></div>`
     : zonas.map((z) => `<h3 class="zona">${esc(z)}</h3><div class="grelha">${vis.filter((m) => m.zona === z).map(cartao).join('')}</div>`).join('')}`;
@@ -355,6 +366,7 @@ function vMenu() {
   const base = location.origin + '/menu?l=' + encodeURIComponent(S.st.local.slug);
   return `<div class="cab"><h1>Menu digital</h1></div><div class="aviso">O QR do local mostra só a carta. O QR de cada mesa deixa o cliente pedir: o pedido entra na conta dessa mesa como «pedido do cliente» e só segue para a cozinha depois de o empregado o confirmar com «Enviar pedido».</div>
     <h3 class="zona">Carta de ${esc(S.st.local.nome)}</h3><div class="fases">${qr(base, S.st.local.nome, 'Só consulta')}</div>
+    <h3 class="zona">Reservas online</h3><div class="fases">${qr(base + '#reservar', 'Reservar em ' + S.st.local.nome, 'O cliente pede a reserva; fica «por confirmar» em Reservas')}</div>
     <h3 class="zona">Pedido na mesa</h3><div class="fases">${S.st.mesas.map((m) => qr(base + '&m=' + m.id, m.nome, esc(m.zona))).join('')}</div>`;
 }
 
@@ -405,9 +417,21 @@ const ACOES = {
   eu: () => modal(`<h2>${esc(S.user.nome)}</h2><p class="mudo">${PERFIS[S.user.perfil]} · utilizador «${esc(S.user.login)}»</p><div class="fila" style="margin-top:14px"><button class="btn" data-a="mudarPass">Alterar palavra-passe</button><span class="esp"></span><button class="btn" data-a="fechar">Fechar</button><button class="btn perigo" data-a="sair">Sair</button></div>`),
   sair: () => { if (S.queue.length && !confirm('Há ' + S.queue.length + ' operação(ões) por sincronizar. Se sair agora perdem-se. Sair mesmo assim?')) return; S.queue = []; ls.del('queue'); fechar(); sair(); },
   mudarPass: () => form('Alterar palavra-passe', [{ k: 'actual', label: 'Palavra-passe actual', type: 'password', req: 1 }, { k: 'nova', label: 'Nova palavra-passe (mín. 6 caracteres)', type: 'password', req: 1 }], async (v) => { await api('password', { method: 'POST', body: v }); toast('Palavra-passe alterada'); }),
-  mesa: (el) => { if (S.x.editar) return; S.x.verConta = false; S.x.busca = ''; const p = S.st.pedidos.find((x) => x.mesa_id === el.dataset.id); if (p) return ir('pedido/' + p.id); if (!pode('pedir')) return; const id = uuid(); if (op('pedido.abrir', { id, local_id: S.local, mesa_id: el.dataset.id })) ir('pedido/' + id); },
+  mesa: (el) => { if (S.x.editar) return; S.x.verConta = false; S.x.busca = ''; const p = S.st.pedidos.find((x) => x.mesa_id === el.dataset.id); if (p) return ir('pedido/' + p.id); if (!pode('pedir')) return;
+    const mm = S.st.mesas.find((x) => x.id === el.dataset.id), rs = mm && !el.dataset.direto ? resMesa(mm) : null;
+    if (rs) return modal(`<h2>${esc(mm.nome)} — reservada</h2><div class="aviso" style="margin-top:10px"><b>${esc(rs.hora)} · ${esc(rs.cliente_nome)}</b><br>${rs.pessoas} pessoa(s)${rs.telefone ? ' · ' + esc(rs.telefone) : ''}${rs.notas ? '<br>' + esc(rs.notas) : ''}${rs.estado === 'pendente' ? '<br><span class="est pendente">pedido online por confirmar</span>' : ''}</div>
+      <div class="fila" style="margin-top:14px"><button class="btn p" data-a="sentar" data-id="${rs.id}" data-m="${mm.id}">Chegaram: abrir conta</button><button class="btn" data-a="reservar" data-r="${rs.id}">Alterar reserva</button><button class="btn perigo" data-a="resEstado" data-id="${rs.id}" data-e="cancelada">Cancelar reserva</button></div>
+      <div class="fila" style="margin-top:10px"><button class="btn s" data-a="mesa" data-id="${mm.id}" data-direto="1">Abrir conta para outro cliente</button><span class="esp"></span><button class="btn s" data-a="fechar">Fechar</button></div>`);
+    fechar(); const id = uuid(); if (op('pedido.abrir', { id, local_id: S.local, mesa_id: el.dataset.id })) ir('pedido/' + id); },
   nova: (el) => { const id = uuid(); if (op('pedido.abrir', { id, local_id: S.local, tipo: el.dataset.t })) ir('pedido/' + id); },
   abrir: (el) => ir('pedido/' + el.dataset.id),
+  reservar: (el) => { const r = el.dataset.r ? (S.st.reservas || []).find((x) => x.id === el.dataset.r) : null; mReserva(el.dataset.id || '', r); },
+  resEstado: async (el) => { const r = (S.st.reservas || []).find((x) => x.id === el.dataset.id); if (!r) return; if (el.dataset.e === 'cancelada' && !confirm('Cancelar a reserva de ' + r.cliente_nome + '?')) return;
+    try { await api('reg', { method: 'POST', body: { entidade: 'reservas', linha: Object.assign({}, r, { estado: el.dataset.e }) } }); fechar(); toast('Reserva actualizada'); await sync(); render(); } catch (e) { toast(e.message, 'erro'); } },
+  sentar: async (el) => { const r = (S.st.reservas || []).find((x) => x.id === el.dataset.id); if (!r) return; const id = uuid();
+    if (!op('pedido.abrir', { id, local_id: S.local, mesa_id: el.dataset.m, cliente_nome: r.cliente_nome })) return;
+    S.st.reservas = S.st.reservas.filter((x) => x !== r); guardar(); fechar(); ir('pedido/' + id);
+    api('reg', { method: 'POST', body: { entidade: 'reservas', linha: Object.assign({}, r, { estado: 'sentada' }) } }).catch(() => toast('Sem rede: marque a reserva como sentada em Reservas', 'erro')); },
   fam: (el) => { S.fam = el.dataset.id; S.x.busca = ''; render(); },
   ham: () => document.body.classList.toggle('menu-on'),
   grp: (el) => { (S.x.grpAb = S.x.grpAb || {})[el.dataset.g] = el.dataset.ab !== '1'; render(); },

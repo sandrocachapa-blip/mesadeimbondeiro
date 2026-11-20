@@ -288,3 +288,12 @@ h1 { font-size: 26px; text-shadow: 0 1px 0 #fff; }
 .at { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 9px 12px; margin-top: 8px; border-radius: 10px; border-left: 6px solid var(--ambar); background: #FFF6DC; }
 .at.mau { border-left-color: #D62B1F; background: #FFE4E0; } .at b { grid-column: 1; } .at span { grid-column: 1; font-size: 13.5px; color: var(--castanho-2); } .at a { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-weight: 700; color: var(--terra-2); white-space: nowrap; }
 .adm-p { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; } .adm-p span { font-size: 12.5px; background: #F1E4CF; border-radius: 99px; padding: 3px 10px; } .adm-p span.al { background: #FFE4A8; font-weight: 700; }
+
+/* ================= Versão 6: mesas reservadas ================= */
+.legenda .l4 { background: #2F6FE0; }
+.res-t { display: block; font-weight: 700; }
+.mesa.res { background: linear-gradient(180deg, #EAF1FF, #D5E3FF); border-color: #2F6FE0; box-shadow: 0 4px 0 #2456B4, 0 14px 20px -14px rgba(36,86,180,.7); }
+.mesa.res .res-t { color: #1B4596; }
+.pm.res .esp1 { background: #1B4596; } .pm.res .esp2 { background: #2456B4; }
+.pm.res .tampo { background: linear-gradient(135deg, #7FA8F5, #2F6FE0); box-shadow: inset 0 0 0 2px rgba(255,255,255,.45), 0 0 20px rgba(47,111,224,.6); }
+.pm.res .tag { background: #1B4596; color: #fff; }

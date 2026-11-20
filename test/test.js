@@ -209,3 +209,31 @@ global.__t1 = (async () => {
   const d = await call('GET', 'daf', null, { local: r.id, mes: a.mes }); assert.equal(Math.round(d.vendas), Math.round(r.mes.vendas)); assert.equal(Math.round(d.cmv), Math.round(r.mes.cmv));
   console.log('OK — administração ao vivo');
 })().catch((e) => { console.error(e); process.exit(1); });
+// ---- Reservas: pedido público e mesas reservadas ----
+(async () => {
+  await global.__t1; await new Promise((r) => setTimeout(r, 14000));
+  const { PGlite } = require('@electric-sql/pglite');
+  const core = require('../lib/core'); core._reset();
+  const pg = new PGlite();
+  const db = { q: async (t, p) => (await pg.query(t, p)).rows, tx: (fn) => pg.transaction((tx) => fn(async (t, p) => (await tx.query(t, p)).rows)) };
+  const env = { AUTH_SECRET: 's', ADMIN_PASSWORD: 'segredo1' };
+  let token = '';
+  const raw = (method, path, body, query) => core.handle(db, env, { method, path: '/api/' + path, body, query: query || {}, token });
+  const hoje = new Date(Date.now() + 3600e3).toISOString().slice(0, 10);
+  const ok = { l: 'principal', nome: 'Rosa Miguel', telefone: '+244 923 111 222', dia: hoje, hora: '20:30', pessoas: 4, notas: 'Aniversário' };
+  assert.equal((await raw('POST', 'reserva-publica', ok)).status, 200);
+  assert.equal((await raw('POST', 'reserva-publica', { ...ok, telefone: '12' })).status, 400);
+  assert.equal((await raw('POST', 'reserva-publica', { ...ok, dia: '2020-01-01' })).status, 400);
+  assert.equal((await raw('POST', 'reserva-publica', { ...ok, pessoas: 0 })).status, 400);
+  assert.equal((await raw('POST', 'reserva-publica', { ...ok, l: 'nao-existe' })).status, 404);
+  token = (await raw('POST', 'login', { login: 'admin', password: 'segredo1' })).json.token;
+  let st = (await raw('GET', 'state')).json;
+  assert.equal(st.reservas.length, 1); assert.equal(st.reservas[0].estado, 'pendente'); assert.equal(st.reservas[0].pessoas, 4);
+  const r = st.reservas[0];
+  assert.equal((await raw('POST', 'reg', { entidade: 'reservas', linha: { ...r, estado: 'confirmada', mesa_id: st.mesas[0].id } })).status, 200);
+  st = (await raw('GET', 'state')).json; assert.equal(st.reservas[0].mesa_id, st.mesas[0].id); assert.equal(st.reservas[0].cliente_nome, 'Rosa Miguel');
+  assert.equal((await raw('GET', 'admin')).json.dinheiro.reservas_pendentes, 0);
+  assert.equal((await raw('POST', 'reg', { entidade: 'reservas', linha: { ...st.reservas[0], estado: 'sentada' } })).status, 200);
+  assert.equal((await raw('GET', 'state')).json.reservas.length, 0);
+  console.log('OK — reservas');
+})().catch((e) => { console.error(e); process.exit(1); });
