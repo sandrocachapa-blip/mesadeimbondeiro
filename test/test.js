@@ -146,3 +146,45 @@ global.__t1 = (async () => {
   assert.equal((await call('GET', 'alertas', null, { local: L })).qr, 1);
   console.log('OK — fases 2 a 4');
 })().catch((e) => { console.error(e); process.exit(1); });
+
+// ---- Juntar mesas e dados fictícios ----
+(async () => {
+  await global.__t1; await new Promise((r) => setTimeout(r, 2500));
+  const { PGlite } = require('@electric-sql/pglite');
+  const core = require('../lib/core'); core._reset();
+  const pg = new PGlite();
+  const db = { q: async (t, p) => (await pg.query(t, p)).rows, tx: (fn) => pg.transaction((tx) => fn(async (t, p) => (await tx.query(t, p)).rows)) };
+  const env = { AUTH_SECRET: 's', ADMIN_PASSWORD: 'segredo1', DEMO_AUTO: '1' };
+  let token = '';
+  const call = async (method, path, body, query) => { const r = await core.handle(db, env, { method, path: '/api/' + path, body, query: query || {}, token }); if (r.status !== 200) throw new Error(path + ' -> ' + r.status + ' ' + JSON.stringify(r.json)); return r.json; };
+  const ops = async (...list) => (await call('POST', 'ops', { ops: list.map((o) => ({ id: 'op-' + Math.random(), ts: new Date().toISOString(), ...o })) })).resultados;
+  token = (await call('POST', 'login', { login: 'admin', password: 'segredo1' })).token;
+  let st = await call('GET', 'state'); const L = st.local.id;
+  const hoje = new Date(Date.now() + 3600e3).toISOString().slice(0, 10), mes = hoje.slice(0, 7);
+  // dados fictícios carregados sozinhos
+  assert.equal(st.locais.length, 2); assert.equal(st.pedidos.length, 3);
+  const rel = await call('GET', 'relatorio', null, { local: L, de: '2020-01-01', ate: hoje }); assert.ok(rel.resumo.contas > 150 && rel.porMeio.length === 4);
+  const sk = await call('GET', 'stock', null, { local: L }); assert.equal(sk.itens.length, 22); assert.ok(sk.itens.every((i) => i.qtd > 0), JSON.stringify(sk.itens.filter((i) => i.qtd <= 0)));
+  const d = await call('GET', 'daf', null, { local: L, mes }); assert.ok(d.vendas > 0 && d.cmv > 0 && d.pessoal > 0 && d.despesas > 0 && d.bancos.length === 2 && d.pagarCompras.length > 0);
+  const al = await call('GET', 'alertas', null, { local: L }); assert.ok(al.stock.length >= 2 && al.reservas.length === 3);
+  assert.equal((await call('GET', 'consolidado', null, { de: '2020-01-01', ate: hoje })).locais.filter((l) => l.vendas > 0).length, 2);
+  assert.ok((await call('GET', 'custos')).artigos.filter((a) => a.n).length >= 15);
+  assert.equal((await call('GET', 'salarios', null, { mes })).linhas.length, 8);
+  assert.ok((await call('GET', 'facturacao', null, { local: L })).docs.length > 100);
+  assert.ok((await call('GET', 'turno', null, { local: L })).ultimos.length === 10);
+  // juntar: duas mesas com conta + uma livre → uma só conta na principal
+  const oc = st.pedidos.map((p) => p.mesa_id), livre = st.mesas.find((m) => !oc.includes(m.id));
+  const tot = st.pedidos[0].total + st.pedidos[1].total;
+  await call('POST', 'mesas-juntar', { principal: oc[0], outras: [oc[1], livre.id] });
+  st = await call('GET', 'state');
+  assert.equal(st.pedidos.length, 2); assert.equal(st.pedidos.find((p) => p.mesa_id === oc[0]).total, tot);
+  assert.equal(st.mesas.filter((m) => m.junta_a === oc[0]).length, 2);
+  const r = await ops({ tipo: 'pedido.abrir', d: { id: 'px', local_id: L, mesa_id: livre.id } }); assert.equal(r[0].ok, false); // a mesa junta responde pela principal, que está ocupada
+  await call('POST', 'mesas-separar', { principal: oc[0] });
+  st = await call('GET', 'state'); assert.equal(st.mesas.filter((m) => m.junta_a).length, 0);
+  await call('POST', 'demo', { acao: 'apagar' });
+  st = await call('GET', 'state'); assert.equal(st.locais.length, 1); assert.equal(st.pedidos.length, 0);
+  assert.equal((await call('GET', 'stock', null, { local: L })).itens.length, 0);
+  await call('POST', 'demo', { acao: 'carregar' }); assert.equal((await call('GET', 'state')).locais.length, 2);
+  console.log('OK — juntar mesas e dados fictícios');
+})().catch((e) => { console.error(e); process.exit(1); });

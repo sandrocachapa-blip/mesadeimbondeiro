@@ -162,7 +162,8 @@ function render() {
   const lado = $('.lado nav'), sc = lado ? lado.scrollTop : 0;
   app.innerHTML = `<aside class="lado"><a class="marca" href="#${todos[0][0]}"><img src="/icon-192.png" alt=""><span>Mesa de<br>Imbondeiro</span></a>
     ${S.st.locais.length > 1 ? `<select id="selLocal">${S.st.locais.map((l) => `<option value="${l.id}" ${l.id === S.local ? 'selected' : ''}>${esc(l.nome)}</option>`).join('')}</select>` : `<div class="loc">${esc(S.st.local.nome)}</div>`}
-    <nav>${gs.map((g) => `<h4>${g.g}</h4>${g.i.map((m) => `<a href="#${m[0]}" class="${m[0] === on ? 'on' : ''}">${m[1]}</a>`).join('')}`).join('')}</nav></aside>
+    <nav>${gs.map((g, k) => { const tem = g.i.some((m) => m[0] === on), ab = (S.x.grpAb || {})[k] != null ? S.x.grpAb[k] : (tem || gs.length === 1);
+      return `<div class="grp ${ab ? 'ab' : ''} ${tem ? 'act' : ''}"><button class="gh" data-a="grp" data-g="${k}" data-ab="${ab ? 1 : 0}"><span>${g.g}</span><i>▾</i></button><div class="sub">${g.i.map((m) => `<a href="#${m[0]}" class="${m[0] === on ? 'on' : ''}">${m[1]}</a>`).join('')}</div></div>`; }).join('')}</nav></aside>
     <div class="vela" data-a="ham"></div>
     <div class="corpo"><header class="topo"><button class="ham" data-a="ham" aria-label="Menu">☰</button><b class="tit">${esc((todos.find((m) => m[0] === on) || ['', ''])[1])}</b><span class="esp"></span><span id="estado" class="pill"></span><button class="eu" data-a="eu">${esc(S.user.nome.split(' ')[0])} ▾</button></header><main>${corpo}</main></div>`;
   if (sc) $('.lado nav').scrollTop = sc;
@@ -179,30 +180,34 @@ function vLogin() {
 
 const temQr = (p) => !!p && p.linhas.some((l) => l.estado === 'novo' && l.criado_por_nome === 'Cliente (QR)');
 function posMesa(m, i) { const e = (S.x.pos || {})[m.id]; return e || { x: m.x != null ? m.x : 14 + (i % 4) * 24, y: m.y != null ? m.y : 20 + Math.floor(i / 4) * 34, forma: m.forma || 'quadrada' }; }
+const filhas = (m) => S.st.mesas.filter((x) => x.junta_a === m.id);
+const mesasVis = () => S.st.mesas.filter((m) => !m.junta_a || !S.st.mesas.some((x) => x.id === m.junta_a));
+const lug = (m) => (m.lugares || 4) + filhas(m).reduce((s, x) => s + (x.lugares || 0), 0);
 function mesa3d(m, i) {
-  const p = S.st.pedidos.find((x) => x.mesa_id === m.id), ps = posMesa(m, i), n = m.lugares || 4, f = ps.forma || 'quadrada';
-  let w = n <= 2 ? 62 : n <= 4 ? 84 : n <= 6 ? 116 : 150, h = f === 'redonda' ? w : (n > 4 || f === 'rect' ? 76 : w);
+  const p = S.st.pedidos.find((x) => x.mesa_id === m.id), ps = posMesa(m, i), fl = filhas(m), n = lug(m), f = fl.length ? 'rect' : ps.forma || 'quadrada';
+  let w = n <= 2 ? 62 : n <= 4 ? 84 : n <= 6 ? 116 : n <= 8 ? 150 : n <= 12 ? 200 : 250, h = f === 'redonda' ? w : (n > 4 || f === 'rect' ? 76 : w);
   if (f === 'rect' && n <= 4) w = 110;
   const cima = Math.ceil(n / 2), baixo = n - cima, cad = (k, top) => Array.from({ length: k }, (_, j) => `<i class="cad" style="left:${((j + 1) / (k + 1)) * 100}%;${top ? 'top:-13px' : 'bottom:-13px'}"></i>`).join('');
-  return `<div class="pm ${f} ${p ? 'oc' : ''} ${temQr(p) ? 'qr' : ''}" data-a="mesa" data-id="${m.id}" style="left:${ps.x}%;top:${ps.y}%;width:${w}px;height:${h}px"><i class="sombra"></i>${cad(cima, 1)}${cad(baixo, 0)}<i class="pe"></i><i class="esp1"></i><i class="esp2"></i><i class="tampo"></i><span class="tag"><b>${esc(m.nome)}</b>${p ? kz(p.total) : n + ' lug.'}${temQr(p) ? '<em>pedido do cliente</em>' : ''}</span></div>`;
+  return `<div class="pm ${f} ${p ? 'oc' : ''} ${temQr(p) ? 'qr' : ''} ${(S.x.sel || []).includes(m.id) ? 'sel' : ''}" data-a="mesa" data-id="${m.id}" style="left:${ps.x}%;top:${ps.y}%;width:${w}px;height:${h}px"><i class="sombra"></i>${cad(cima, 1)}${cad(baixo, 0)}<i class="pe"></i><i class="esp1"></i><i class="esp2"></i><i class="tampo"></i><span class="tag"><b>${esc(m.nome)}</b>${p ? kz(p.total) : n + ' lug.'}${fl.length ? `<small>${fl.length + 1} mesas juntas</small>` : ''}${temQr(p) ? '<em>pedido do cliente</em>' : ''}</span></div>`;
 }
 function vMesas() {
-  const st = S.st, zonas = [...new Set(st.mesas.map((m) => m.zona))];
+  const st = S.st, vis = mesasVis(), zonas = [...new Set(vis.map((m) => m.zona))], nSel = (S.x.sel || []).length;
   if (!zonas.includes(S.x.zona)) S.x.zona = zonas[0];
   const modo = S.x.modoMesas || (window.innerWidth < 760 ? 'lista' : 'planta'), ed = !!S.x.editar && modo === 'planta';
   const cartao = (m) => { const p = st.pedidos.find((x) => x.mesa_id === m.id);
-    return `<button class="mesa ${p ? 'oc' : ''}" data-a="mesa" data-id="${m.id}"><b>${esc(m.nome)}</b><span class="mudo">${p ? esc(p.aberto_por_nome) + ' · ' + mins(p.aberto_em) + ' min' : m.lugares + ' lugares · livre'}</span>${temQr(p) ? '<span class="est novo">pedido do cliente</span>' : ''}${p ? `<span class="tot">${kz(p.total)}</span>` : ''}</button>`; };
+    return `<button class="mesa ${p ? 'oc' : ''}" data-a="mesa" data-id="${m.id}"><b>${esc(m.nome)}</b><span class="mudo">${p ? esc(p.aberto_por_nome) + ' · ' + mins(p.aberto_em) + ' min' : lug(m) + ' lugares · livre'}${filhas(m).length ? ' · ' + (filhas(m).length + 1) + ' mesas juntas' : ''}</span>${temQr(p) ? '<span class="est novo">pedido do cliente</span>' : ''}${p ? `<span class="tot">${kz(p.total)}</span>` : ''}</button>`; };
   const soltas = st.pedidos.filter((p) => !p.mesa_id), ocup = st.pedidos.filter((p) => p.mesa_id).length;
-  return `<div class="cab"><h1>${esc(st.local.nome)}</h1><span class="mudo">${ocup} de ${st.mesas.length} mesas ocupadas</span><span class="esp"></span>
+  return `<div class="cab"><h1>${esc(st.local.nome)}</h1><span class="mudo">${ocup} de ${vis.length} mesas ocupadas</span><span class="esp"></span>
     <div class="seg"><button class="${modo === 'planta' ? 'on' : ''}" data-a="modoMesas" data-m="planta">Planta 3D</button><button class="${modo === 'lista' ? 'on' : ''}" data-a="modoMesas" data-m="lista">Lista</button></div>
-    ${modo === 'planta' && pode('cfg') ? (ed ? '<button class="btn p" data-a="guardarPlanta">Guardar planta</button><button class="btn" data-a="editarPlanta">Cancelar</button>' : '<button class="btn" data-a="editarPlanta">Editar planta</button>') : ''}
+    ${modo === 'planta' && pode('cfg') ? (ed ? '' : '<button class="btn p" data-a="editarPlanta">Mover e juntar mesas</button>') : ''}
     <button class="btn" data-a="nova" data-t="balcao">Conta de balcão</button><button class="btn" data-a="nova" data-t="takeaway">Take-away</button></div>
     ${!st.turno && pode('pagar') ? '<div class="aviso">A caixa está fechada. Pode registar pedidos, mas para receber pagamentos abra a caixa no menu <a href="#caixa">Caixa</a>.</div>' : ''}
-    ${ed ? '<div class="aviso">Arraste as mesas para a posição certa. Toque numa mesa sem arrastar para mudar a forma (quadrada, redonda, rectangular). No fim, guarde a planta.</div>' : ''}
+    ${ed ? `<div class="aviso ferr"><div><b>Mover:</b> arraste cada mesa para o sítio. <b>Juntar:</b> toque nas mesas a juntar (a primeira fica com o número activo) e escolha «Juntar». As outras deixam de aparecer e a conta passa a ser uma só.</div>
+      <div class="fila" style="margin-top:10px"><button class="btn p" data-a="juntarMesas" ${nSel >= 2 ? '' : 'disabled'}>Juntar${nSel >= 2 ? ' ' + nSel + ' mesas' : ''}</button><button class="btn" data-a="separarMesas" ${nSel ? '' : 'disabled'}>Separar</button><button class="btn" data-a="formaMesas" ${nSel ? '' : 'disabled'}>Mudar forma</button><span class="esp"></span><button class="btn p" data-a="guardarPlanta">Guardar posições</button><button class="btn" data-a="editarPlanta">Fechar</button></div></div>` : ''}
     ${soltas.length ? `<h3 class="zona">Balcão e take-away</h3><div class="grelha">${soltas.map((p) => `<button class="mesa oc" data-a="abrir" data-id="${p.id}"><b>${esc(p.mesa_nome)}</b><span class="mudo">${esc(p.aberto_por_nome)} · ${hora(p.aberto_em)}</span><span class="tot">${kz(p.total)}</span></button>`).join('')}</div>` : ''}
     ${modo === 'planta' ? `<div class="chips" style="margin-top:12px">${zonas.map((z) => `<button class="chip ${z === S.x.zona ? 'on' : ''}" data-a="zona" data-id="${esc(z)}">${esc(z)}</button>`).join('')}</div>
-      <div class="planta-w"><div class="planta ${ed ? 'editar' : ''}" id="planta">${st.mesas.filter((m) => m.zona === S.x.zona).map(mesa3d).join('')}</div></div>`
-    : zonas.map((z) => `<h3 class="zona">${esc(z)}</h3><div class="grelha">${st.mesas.filter((m) => m.zona === z).map(cartao).join('')}</div>`).join('')}`;
+      <div class="planta-w"><div class="planta ${ed ? 'editar' : ''}" id="planta">${vis.filter((m) => m.zona === S.x.zona).map(mesa3d).join('')}</div></div>`
+    : zonas.map((z) => `<h3 class="zona">${esc(z)}</h3><div class="grelha">${vis.filter((m) => m.zona === z).map(cartao).join('')}</div>`).join('')}`;
 }
 
 function vPedido(id) {
@@ -358,7 +363,8 @@ function vCfg() {
   if (tab === 'mesas') corpo = T(['Mesa', 'Zona', 'Local', 'Lugares', 'Activa'], d.mesas.map((m) => [m.id, esc(m.nome), esc(m.zona), esc(loc(m.local_id)), m.lugares, sn(m.activo)]));
   if (tab === 'locais') corpo = T(['Local', 'Tipo', 'Morada', 'Endereço do menu', 'Activo'], d.locais.map((l) => [l.id, esc(l.nome), esc(l.tipo), esc(l.morada), '/menu?l=' + esc(l.slug), sn(l.activo)]));
   if (tab === 'utilizadores') corpo = T(['Nome', 'Utilizador', 'Perfil', 'Local', 'Activo'], d.utilizadores.map((u) => [u.id, esc(u.nome), esc(u.login), PERFIS[u.perfil] || u.perfil, esc(loc(u.local_id)), sn(u.activo)]));
-  if (tab === 'empresa') { const e = d.empresa; corpo = `<table><tr><td>Nome</td><td>${esc(e.nome)}</td></tr><tr><td>NIF</td><td>${esc(e.nif) || '—'}</td></tr><tr><td>Regime de IVA</td><td>${esc(e.regime_iva)}</td></tr><tr><td>Taxa de IVA incluída nos preços</td><td>${e.taxa_iva}%</td></tr><tr><td>Software de facturação certificado</td><td>${esc(e.factura_software) || 'por definir'}</td></tr></table>`; }
+  if (tab === 'empresa') { const e = d.empresa; corpo = `<table><tr><td>Nome</td><td>${esc(e.nome)}</td></tr><tr><td>NIF</td><td>${esc(e.nif) || '—'}</td></tr><tr><td>Regime de IVA</td><td>${esc(e.regime_iva)}</td></tr><tr><td>Taxa de IVA incluída nos preços</td><td>${e.taxa_iva}%</td></tr><tr><td>Software de facturação certificado</td><td>${esc(e.factura_software) || 'por definir'}</td></tr></table>
+    <div class="aviso" style="margin:16px 0 0"><b>Dados fictícios de demonstração.</b> Preenchem todos os menus com vendas, stock, compras, equipa, salários, finanças, reservas e um segundo local de exemplo. Podem ser apagados de uma vez, sem tocar nos dados reais.<div class="fila" style="margin-top:10px"><button class="btn" data-a="demo" data-ac="carregar">Carregar dados fictícios</button><button class="btn perigo" data-a="demo" data-ac="apagar">Apagar dados fictícios</button></div></div>`; }
   return `<div class="cab"><h1>Configuração</h1><span class="esp"></span><button class="btn p" data-a="cfgEdit" data-id="">${tab === 'empresa' ? 'Editar dados da empresa' : 'Novo registo'}</button></div>
     <div class="tabs">${tabs.map((t) => `<button class="chip ${t[0] === tab ? 'on' : ''}" data-a="cfgTab" data-id="${t[0]}">${t[1]}</button>`).join('')}</div><div class="cartao" style="overflow:auto">${corpo}</div>`;
 }
@@ -394,12 +400,20 @@ const ACOES = {
   abrir: (el) => ir('pedido/' + el.dataset.id),
   fam: (el) => { S.fam = el.dataset.id; S.x.busca = ''; render(); },
   ham: () => document.body.classList.toggle('menu-on'),
+  grp: (el) => { (S.x.grpAb = S.x.grpAb || {})[el.dataset.g] = el.dataset.ab !== '1'; render(); },
+  demo: async (el) => { const ap = el.dataset.ac === 'apagar'; if (!confirm(ap ? 'Apagar todos os dados fictícios? Os dados reais que tenha introduzido ficam.' : 'Carregar dados fictícios em todos os menus?')) return;
+    try { el.disabled = true; await api('demo', { method: 'POST', body: { acao: el.dataset.ac } }); toast(ap ? 'Dados fictícios apagados' : 'Dados fictícios carregados'); S.x = {}; S.st = null; guardar(); render(); sync(); } catch (e) { toast(e.message, 'erro'); el.disabled = false; } },
+  juntarMesas: async () => { const sel = S.x.sel || []; if (sel.length < 2) return toast('Toque em duas ou mais mesas para as juntar', 'erro');
+    try { await api('mesas-juntar', { method: 'POST', body: { principal: sel[0], outras: sel.slice(1) } }); S.x.sel = []; toast('Mesas juntas: fica activa só a ' + S.st.mesas.find((m) => m.id === sel[0]).nome); await sync(); await sync(); render(); } catch (e) { toast(e.message, 'erro'); } },
+  separarMesas: async () => { const sel = (S.x.sel || []).filter((id) => S.st.mesas.some((m) => m.junta_a === id)); if (!sel.length) return toast('Toque numa mesa junta para a separar', 'erro');
+    try { for (const id of sel) await api('mesas-separar', { method: 'POST', body: { principal: id } }); S.x.sel = []; toast('Mesas separadas'); await sync(); await sync(); render(); } catch (e) { toast(e.message, 'erro'); } },
+  formaMesas: () => { (S.x.sel || []).forEach((id) => { const m = S.st.mesas.find((x) => x.id === id), i = mesasVis().filter((x) => x.zona === m.zona).indexOf(m), ps = Object.assign({}, posMesa(m, i)); ps.forma = { quadrada: 'redonda', redonda: 'rect', rect: 'quadrada' }[ps.forma || 'quadrada']; (S.x.pos = S.x.pos || {})[id] = ps; }); render(); },
   verConta: () => { S.x.verConta = !S.x.verConta; render(); window.scrollTo(0, 0); },
   modoMesas: (el) => { S.x.modoMesas = el.dataset.m; S.x.editar = false; render(); },
   zona: (el) => { S.x.zona = el.dataset.id; render(); },
-  editarPlanta: () => { S.x.editar = !S.x.editar; S.x.pos = {}; render(); },
-  guardarPlanta: async () => { const ms = S.st.mesas.map((m) => Object.assign({ id: m.id }, posMesa(m, S.st.mesas.filter((y) => y.zona === m.zona).indexOf(m))));
-    try { await api('planta', { method: 'POST', body: { mesas: ms } }); ms.forEach((x) => { const m = S.st.mesas.find((y) => y.id === x.id); m.x = x.x; m.y = x.y; m.forma = x.forma; }); S.x.editar = false; S.x.pos = {}; guardar(); toast('Planta guardada'); render(); } catch (e) { toast(e.message, 'erro'); } },
+  editarPlanta: () => { S.x.editar = !S.x.editar; S.x.pos = {}; S.x.sel = []; S.x.modoMesas = 'planta'; render(); },
+  guardarPlanta: async () => { const ms = mesasVis().map((m) => Object.assign({ id: m.id }, posMesa(m, mesasVis().filter((y) => y.zona === m.zona).indexOf(m))));
+    try { await api('planta', { method: 'POST', body: { mesas: ms } }); ms.forEach((x) => { const m = S.st.mesas.find((y) => y.id === x.id); m.x = x.x; m.y = x.y; m.forma = x.forma; }); S.x.pos = {}; guardar(); toast('Posições guardadas'); render(); } catch (e) { toast(e.message, 'erro'); } },
   add: (el) => { const p = P(rota().id); if (!p) return; const l = p.linhas.find((x) => x.artigo_id === el.dataset.id && x.estado === 'novo' && !x.notas); if (l) op('linha.qtd', { id: l.id, qtd: l.qtd + 1 }); else op('linha.add', { id: uuid(), pedido_id: p.id, artigo_id: el.dataset.id, qtd: 1 }); render(); },
   mais: (el) => { const [, l] = linhaDe(el.dataset.id); if (l) { op('linha.qtd', { id: l.id, qtd: l.qtd + 1 }); render(); } },
   menos: (el) => { const [, l] = linhaDe(el.dataset.id); if (l) { op('linha.qtd', { id: l.id, qtd: l.qtd - 1 }); render(); } },
@@ -458,9 +472,10 @@ let arr = null;
 document.addEventListener('pointerdown', (e) => { const el = e.target.closest('.planta.editar .pm'); if (!el) return; e.preventDefault(); arr = { el, id: el.dataset.id, x0: e.clientX, y0: e.clientY, mexeu: false }; });
 document.addEventListener('pointermove', (e) => { if (!arr) return; if (Math.abs(e.clientX - arr.x0) + Math.abs(e.clientY - arr.y0) > 5) arr.mexeu = true; if (!arr.mexeu) return;
   const r = $('#planta').getBoundingClientRect(); arr.x = Math.min(96, Math.max(4, ((e.clientX - r.left) / r.width) * 100)); arr.y = Math.min(94, Math.max(6, ((e.clientY - r.top) / r.height) * 100)); arr.el.style.left = arr.x + '%'; arr.el.style.top = arr.y + '%'; });
-document.addEventListener('pointerup', () => { if (!arr) return; const i = S.st.mesas.filter((m) => m.zona === S.x.zona).findIndex((m) => m.id === arr.id), m = S.st.mesas.find((x) => x.id === arr.id), ps = Object.assign({}, posMesa(m, i));
-  if (arr.mexeu) { ps.x = Math.round(arr.x * 10) / 10; ps.y = Math.round(arr.y * 10) / 10; } else ps.forma = { quadrada: 'redonda', redonda: 'rect', rect: 'quadrada' }[ps.forma || 'quadrada'];
-  (S.x.pos = S.x.pos || {})[arr.id] = ps; arr = null; render(); });
+document.addEventListener('pointerup', () => { if (!arr) return; const i = mesasVis().filter((m) => m.zona === S.x.zona).findIndex((m) => m.id === arr.id), m = S.st.mesas.find((x) => x.id === arr.id), ps = Object.assign({}, posMesa(m, i));
+  if (arr.mexeu) { ps.x = Math.round(arr.x * 10) / 10; ps.y = Math.round(arr.y * 10) / 10; (S.x.pos = S.x.pos || {})[arr.id] = ps; }
+  else { const sel = (S.x.sel = S.x.sel || []), k = sel.indexOf(arr.id); if (k >= 0) sel.splice(k, 1); else sel.push(arr.id); }
+  arr = null; render(); });
 window.addEventListener('online', () => { sync(); });
 window.addEventListener('offline', () => { S.online = false; pintarEstado(); });
 setInterval(() => { if (!document.hidden) sync(); }, 6000);
