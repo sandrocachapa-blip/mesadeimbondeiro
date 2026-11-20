@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-AO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#4A1A0C">
+<title>Menu — Mesa de Imbondeiro</title>
+<link rel="icon" href="/icon-192.png">
+<style>
+  body { margin: 0; background: #FAF3E8; color: #4A1A0C; font: 16px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+  .w { max-width: 620px; margin: 0 auto; padding: 20px 18px 60px; }
+  header { text-align: center; padding: 10px 0 4px; }
+  header img { width: 230px; max-width: 70%; }
+  header p { margin: 4px 0 0; color: #6B3A26; }
+  nav { position: sticky; top: 0; background: #FAF3E8; display: flex; gap: 6px; overflow-x: auto; padding: 10px 0; border-bottom: 2px solid #4A1A0C; }
+  nav a { border: 1.5px solid #4A1A0C; border-radius: 99px; padding: 6px 14px; text-decoration: none; color: #4A1A0C; font-weight: 600; white-space: nowrap; }
+  h2 { font-family: 'Cooper Black', 'Rockwell Extra Bold', Georgia, serif; color: #B03F1B; margin: 26px 0 6px; font-size: 22px; scroll-margin-top: 60px; }
+  .a { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px dashed #E2CFB2; }
+  .a div { flex: 1; } .a b { display: block; } .a small { color: #6B3A26; }
+  .a span { font-weight: 700; white-space: nowrap; }
+  footer { text-align: center; color: #6B3A26; font-size: 13px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="w">
+  <header><img src="/logo.png" alt="Mesa de Imbondeiro"><p id="local"></p></header>
+  <nav id="nav"></nav>
+  <div id="menu"><p style="text-align:center">A carregar o menu…</p></div>
+  <footer>Preços em kwanzas, com impostos incluídos.</footer>
+</div>
+<script>
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const kz = (n) => new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 0 }).format(Math.round(n || 0)).replace(/\s/g, ' ') + ' Kz';
+const l = new URLSearchParams(location.search).get('l') || 'principal';
+fetch('/api/menu?l=' + encodeURIComponent(l)).then((r) => r.json()).then((m) => {
+  if (m.erro) throw new Error(m.erro);
+  document.getElementById('local').textContent = m.local + (m.morada ? ' · ' + m.morada : '');
+  document.getElementById('nav').innerHTML = m.familias.map((f, i) => `<a href="#f${i}">${esc(f.nome)}</a>`).join('');
+  document.getElementById('menu').innerHTML = m.familias.map((f, i) => `<h2 id="f${i}">${esc(f.nome)}</h2>` + f.artigos.map((a) => `<div class="a"><div><b>${esc(a.nome)}</b><small>${esc(a.descricao)}</small></div><span>${kz(a.preco)}</span></div>`).join('')).join('');
+}).catch((e) => { document.getElementById('menu').innerHTML = '<p style="text-align:center">Não foi possível carregar o menu. ' + esc(e.message) + '</p>'; });
+</script>
+</body>
+</html>

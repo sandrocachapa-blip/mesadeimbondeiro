@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:p*",
+      "destination": "/api/index?__p=:p*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    }
+  ],
+  "cleanUrls": true
+}

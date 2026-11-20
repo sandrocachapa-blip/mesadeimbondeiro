@@ -1,0 +1,10 @@
+{
+  "name": "mesa-de-imbondeiro",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mesa de Imbondeiro — gestão de restaurantes e bares",
+  "engines": { "node": "22.x" },
+  "scripts": { "dev": "node dev.js", "test": "node test/test.js" },
+  "dependencies": { "pg": "^8.13.1", "qrcode": "^1.5.4" },
+  "devDependencies": { "@electric-sql/pglite": "^0.2.17" }
+}
