@@ -216,3 +216,64 @@ VIEWS.grupo = () => { const f = S.x.grpF || (S.x.grpF = { de: hojeLuanda().slice
       <div class="cartao" style="overflow:auto"><table><tr><th>Local</th><th>Tipo</th><th class="dir">Vendas</th><th style="width:22%"></th><th class="dir">Contas</th><th class="dir">Média</th><th class="dir">Custo mercadoria</th><th class="dir">Abertas agora</th></tr>${ls.map((l) => `<tr><td><b>${esc(l.nome)}</b></td><td>${esc(l.tipo)}</td><td class="dir">${kz(l.vendas)}</td><td><div class="barra-h"><i style="width:${Math.round(l.vendas / mx * 100)}%"></i></div></td><td class="dir">${l.contas}</td><td class="dir">${kz(l.contas ? l.vendas / l.contas : 0)}</td><td class="dir">${l.vendas ? Math.round(l.cmv / l.vendas * 100) + '%' : '—'}</td><td class="dir">${l.abertas}</td></tr>`).join('')}</table></div>`; },
   `<input type="date" id="grpDe" value="${f.de}" style="width:auto"><span>a</span><input type="date" id="grpAte" value="${f.ate}" style="width:auto"><button class="btn p" data-a="grpVer">Ver</button>`); };
 ACOES.grpVer = () => { S.x.grpF = { de: $('#grpDe').value, ate: $('#grpAte').value }; refrescar('grp'); };
+
+/* ---------- Administração ao vivo: o que cada local está a fazer e os custos do mês ---------- */
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+function vAdmin() {
+  const c = carregar('adm', () => api('admin'));
+  if (!c || c.erro) return '<div class="cab"><h1>Administração ao vivo</h1></div>' + espera(c);
+  const d = c.d, ls = d.locais, soma = (f) => ls.reduce((s, l) => s + f(l), 0);
+  const vh = soma((l) => l.hoje.vendas), vsp = soma((l) => l.hoje.semana_passada), vm = soma((l) => l.mes.vendas);
+  const cmv = soma((l) => l.mes.cmv), perdas = soma((l) => l.mes.perdas), pes = soma((l) => l.mes.pessoal) + d.geral.pessoal, desp = soma((l) => l.mes.despesas) + d.geral.despesas, custos = cmv + perdas + pes + desp, res = vm - custos;
+  const varia = vsp ? Math.round((vh / vsp - 1) * 100) : null;
+  const seg = (n, v, cls) => (v > 0 && vm > 0 ? `<i class="${cls}" style="width:${Math.max(1.5, (v / Math.max(vm, custos)) * 100)}%" title="${n}: ${kz(v)}"></i>` : '');
+  const leg = (n, v, cls) => `<span><i class="${cls}"></i>${n} <b>${kz(v)}</b> · ${pct(v, vm)}%</span>`;
+  const cartao = (l) => { const a = l.agora, mx = Math.max(1, ...l.horas.map((x) => x.v)), custoM = l.mes.cmv + l.mes.perdas + l.mes.pessoal + l.mes.despesas;
+    const est = a.vermelhas ? 'vermelho' : a.amarelas ? 'amarelo' : a.contas ? 'verde' : '';
+    const sec = (n, x) => `<div class="adm-s ${x.espera >= 30 ? 'vermelho' : x.espera >= 10 ? 'amarelo' : ''}"><small>${n}</small><b>${x.linhas ? x.linhas + ' em preparação' : 'sem pedidos'}</b>${x.linhas ? `<span>espera máx. ${x.espera} min</span>` : ''}</div>`;
+    return `<div class="cartao adm-l ${est}"><div class="fila"><h2>${esc(l.nome)}</h2><span class="esp"></span><span class="est ${l.caixa ? 'ok' : ''}">${l.caixa ? 'caixa aberta' : 'caixa fechada'}</span></div>
+      <div class="adm-big"><b>${kz(l.hoje.vendas)}</b><span>hoje · ${l.hoje.contas} contas · média ${kz(l.hoje.contas ? l.hoje.vendas / l.hoje.contas : 0)}</span></div>
+      <div class="barras adm-h">${l.horas.length ? l.horas.map((x) => `<div style="height:${Math.round((x.v / mx) * 100)}%" title="${x.hora}h: ${kz(x.v)}"><span>${x.hora}h</span></div>`).join('') : '<p class="mudo" style="align-self:center">Ainda sem vendas hoje.</p>'}</div>
+      <div class="adm-g"><div class="adm-s"><small>Mesas</small><b>${a.mesas_ocupadas} de ${a.mesas} ocupadas</b><div class="barra-h"><i style="width:${pct(a.mesas_ocupadas, a.mesas)}%"></i></div></div>
+        <div class="adm-s"><small>Contas abertas</small><b>${a.contas} · ${kz(a.valor)}</b>${a.amarelas || a.vermelhas ? `<span>${a.vermelhas ? a.vermelhas + ' mesa(s) a vermelho' : ''}${a.vermelhas && a.amarelas ? ' · ' : ''}${a.amarelas ? a.amarelas + ' a amarelo' : ''}</span>` : ''}</div>
+        ${sec('Cozinha', a.cozinha)}${sec('Bar', a.bar)}
+        <div class="adm-s"><small>Equipa ao serviço</small><b>${a.ao_servico} pessoa(s)</b></div>
+        <div class="adm-s"><small>Hoje</small><b>mercadoria ${pct(l.hoje.cmv, l.hoje.vendas)}%</b><span>descontos ${kz(l.hoje.descontos)} · ${l.hoje.anulacoes} anulação(ões)</span></div></div>
+      <div class="adm-p"><span>${l.pendentes.reservas} reserva(s) hoje · ${l.pendentes.reservas_pessoas} pessoas</span><span class="${l.pendentes.stock_baixo ? 'al' : ''}">${l.pendentes.stock_baixo} ingrediente(s) abaixo do mínimo</span><span class="${l.pendentes.facturas ? 'al' : ''}">${l.pendentes.facturas} conta(s) por facturar</span></div>
+      <table class="adm-m"><tr><th>Mês</th><th class="dir">Vendas</th><th class="dir">Custos</th><th class="dir">Resultado</th></tr><tr><td>${esc(d.mes)}</td><td class="dir">${kz(l.mes.vendas)}</td><td class="dir">${kz(custoM)}</td><td class="dir"><b>${kz(l.mes.resultado)}</b> · ${pct(l.mes.resultado, l.mes.vendas)}%</td></tr></table></div>`; };
+  const ICO = { conta: 'ok', anulacao: 'erro', caixa: 'pendente' };
+  return `<div class="cab"><h1>Administração ao vivo</h1><span class="vivo"><i></i>actualizado às ${new Date(d.agora).toLocaleTimeString('pt-PT')} · renova a cada 15 segundos</span></div>
+    <div class="kpis"><div class="cartao kpi">Vendas de hoje (grupo)<b>${kz(vh)}</b>${varia == null ? '' : `<small class="${varia >= 0 ? 'sobe' : 'desce'}">${varia >= 0 ? '▲ +' : '▼ '}${varia}% face à mesma hora da semana passada</small>`}</div>
+      <div class="cartao kpi">Contas abertas agora<b>${soma((l) => l.agora.contas)} · ${kz(soma((l) => l.agora.valor))}</b><small>${soma((l) => l.agora.mesas_ocupadas)} de ${soma((l) => l.agora.mesas)} mesas ocupadas</small></div>
+      <div class="cartao kpi">Vendas do mês<b>${kz(vm)}</b><small>${soma((l) => l.mes.contas)} contas</small></div>
+      <div class="cartao kpi">Custos do mês<b>${kz(custos)}</b><small>${pct(custos, vm)}% das vendas</small></div>
+      <div class="cartao kpi">Resultado do mês<b class="${res < 0 ? 'neg' : ''}">${kz(res)}</b><small>margem ${pct(res, vm)}%</small></div></div>
+    <div class="cartao" style="margin-bottom:14px"><h3>Para onde vai cada kwanza vendido este mês</h3><div class="pilha">${seg('Mercadoria', cmv, 'c1')}${seg('Quebras e perdas', perdas, 'c2')}${seg('Pessoal', pes, 'c3')}${seg('Outras despesas', desp, 'c4')}${seg('Resultado', Math.max(0, res), 'c5')}</div>
+      <div class="pilha-l">${leg('Mercadoria', cmv, 'c1')}${leg('Quebras e perdas', perdas, 'c2')}${leg('Pessoal', pes, 'c3')}${leg('Outras despesas', desp, 'c4')}${leg('Resultado', res, 'c5')}</div>
+      <p class="mudo" style="margin:8px 0 0">A mercadoria conta os artigos com ficha técnica; o pessoal conta os salários já processados no mês.</p></div>
+    ${atencao(d)}
+    <div class="adm-ls">${ls.map(cartao).join('')}</div>
+    <div class="duas" style="margin-top:14px"><div class="cartao"><h3>A acontecer agora</h3>${d.eventos.length ? `<table>${d.eventos.map((e) => `<tr><td style="white-space:nowrap">${dataHora(e.t)}</td><td><span class="est ${ICO[e.tipo]}">${esc(e.l)}</span></td><td>${esc(e.txt)}</td><td class="dir">${e.valor != null ? kz(e.valor) : ''}</td></tr>`).join('')}</table>` : '<p class="mudo">Sem actividade.</p>'}</div>
+    <div class="cartao"><h3>Mais vendidos hoje (grupo)</h3>${d.topo.length ? `<table>${d.topo.map((t) => `<tr><td>${esc(t.nome)}</td><td class="dir">${t.qtd}</td><td class="dir">${kz(t.valor)}</td></tr>`).join('')}</table>` : '<p class="mudo">Ainda sem vendas hoje.</p>'}</div></div>`;
+}
+function atencao(d) {
+  const m = d.dinheiro, ls = d.locais, it = [], soma = (f) => ls.reduce((s, l) => s + f(l), 0);
+  const add = (cls, tit, txt, href, rot) => it.push(`<div class="at ${cls}"><b>${tit}</b><span>${txt}</span>${href ? `<a href="#${href}">${rot}</a>` : ''}</div>`);
+  const verm = ls.filter((l) => l.agora.vermelhas), am = ls.filter((l) => l.agora.amarelas && !l.agora.vermelhas);
+  if (verm.length) add('mau', 'Mesas à espera há mais de 30 minutos', verm.map((l) => esc(l.nome) + ': ' + l.agora.vermelhas).join(' · '), 'mesas', 'Ver mesas');
+  if (am.length) add('med', 'Mesas à espera há mais de 10 minutos', am.map((l) => esc(l.nome) + ': ' + l.agora.amarelas).join(' · '), 'mesas', 'Ver mesas');
+  const fech = ls.filter((l) => !l.caixa && l.agora.contas); if (fech.length) add('med', 'Contas abertas com a caixa fechada', fech.map((l) => esc(l.nome)).join(' · '), 'caixa', 'Abrir caixa');
+  if (m.n_vencidas) add('mau', 'Facturas de fornecedores vencidas', `${m.n_vencidas} factura(s), ${kz(m.vencido)} em atraso`, 'daf', 'Ver contas a pagar');
+  const sb = soma((l) => l.pendentes.stock_baixo); if (sb) add('med', 'Stock abaixo do mínimo', ls.filter((l) => l.pendentes.stock_baixo).map((l) => esc(l.nome) + ': ' + l.pendentes.stock_baixo).join(' · '), 'compras', 'Encomendar');
+  const fc = soma((l) => l.pendentes.facturas); if (fc) add('med', 'Contas por passar ao software de facturação', `${fc} conta(s), ${kz(soma((l) => l.pendentes.facturas_valor))}`, 'facturacao', 'Ver fila');
+  if (m.n_salarios) add('med', 'Salários processados por pagar', `${m.n_salarios} recibo(s), ${kz(m.salarios)}`, 'salarios', 'Ver salários');
+  d.difs.slice(0, 2).forEach((f) => add(f.dif < 0 ? 'mau' : 'med', 'Diferença no fecho de caixa', `${esc(f.l)}: ${f.dif > 0 ? '+' : '−'} ${kz(Math.abs(f.dif))} em ${dataHora(f.t)}, fechada por ${esc(f.por)}`, 'caixa', 'Ver fechos'));
+  const an = soma((l) => l.hoje.anulacoes); if (an) add('med', 'Linhas anuladas hoje', `${an} linha(s), ${kz(soma((l) => l.hoje.anulado))}`, 'relatorios', 'Ver relatório');
+  return `<div class="duas" style="margin-bottom:14px"><div class="cartao"><h3>A precisar de atenção</h3>${it.length ? it.join('') : '<p class="mudo">Nada a assinalar neste momento.</p>'}</div>
+    <div class="cartao"><h3>Dinheiro</h3><table><tr><td>Saldo em bancos e cofres (${m.contas} conta(s))</td><td class="dir"><b>${kz(m.bancos)}</b></td></tr><tr><td>Por pagar a fornecedores</td><td class="dir">− ${kz(m.fornecedores)}</td></tr><tr><td>Despesas por pagar (${m.n_despesas})</td><td class="dir">− ${kz(m.despesas)}</td></tr><tr><td>Salários por pagar</td><td class="dir">− ${kz(m.salarios)}</td></tr><tr><td><b>Disponível depois de pagar tudo</b></td><td class="dir"><b>${kz(m.bancos - m.fornecedores - m.despesas - m.salarios)}</b></td></tr></table>
+      <p class="mudo" style="margin:8px 0 0">O saldo é o das contas registadas em Finanças → Tesouraria; só é fiável se os depósitos e pagamentos forem lá lançados.</p>
+      <div class="fila" style="margin-top:10px"><a class="btn s" href="#daf">Finanças</a><a class="btn s" href="#grupo">Comparar locais</a><a class="btn s" href="#relatorios">Relatórios</a><a class="btn s" href="#painel">Alertas do local</a></div></div></div>`;
+}
+VIEWS.admin = vAdmin;
+setInterval(() => { if (!S.token || rota().v !== 'admin' || document.hidden || $('#modal').classList.contains('on')) return;
+  api('admin').then((d) => { S.x.adm = { pronto: true, d }; if (rota().v === 'admin') { const y = window.scrollY; render(); window.scrollTo(0, y); } }).catch(() => {}); }, 15000);

@@ -188,3 +188,24 @@ global.__t1 = (async () => {
   await call('POST', 'demo', { acao: 'carregar' }); assert.equal((await call('GET', 'state')).locais.length, 2);
   console.log('OK — juntar mesas e dados fictícios');
 })().catch((e) => { console.error(e); process.exit(1); });
+// ---- Administração ao vivo ----
+(async () => {
+  await global.__t1; await new Promise((r) => setTimeout(r, 9000));
+  const { PGlite } = require('@electric-sql/pglite');
+  const core = require('../lib/core'); core._reset();
+  const pg = new PGlite();
+  const db = { q: async (t, p) => (await pg.query(t, p)).rows, tx: (fn) => pg.transaction((tx) => fn(async (t, p) => (await tx.query(t, p)).rows)) };
+  const env = { AUTH_SECRET: 's', ADMIN_PASSWORD: 'segredo1', DEMO_AUTO: '1' };
+  let token = '';
+  const call = async (method, path, body, query) => { const r = await core.handle(db, env, { method, path: '/api/' + path, body, query: query || {}, token }); if (r.status !== 200) throw new Error(path + ' -> ' + r.status + ' ' + JSON.stringify(r.json)); return r.json; };
+  token = (await call('POST', 'login', { login: 'admin', password: 'segredo1' })).token;
+  const a = await call('GET', 'admin');
+  assert.equal(a.locais.length, 2); const r = a.locais[0];
+  assert.ok(r.mes.vendas > 0 && r.mes.cmv > 0 && r.mes.pessoal > 0 && r.mes.despesas > 0);
+  assert.equal(r.agora.contas, 3); assert.equal(r.agora.mesas, 10); assert.ok(r.agora.cozinha.linhas + r.agora.bar.linhas > 0);
+  assert.ok(a.dinheiro.bancos > 0 && a.dinheiro.fornecedores > 0 && a.dinheiro.n_despesas === 1 && a.dinheiro.n_salarios === 8);
+  assert.ok(r.pendentes.facturas > 0 && r.pendentes.stock_baixo >= 2 && r.pendentes.reservas === 3);
+  assert.ok(a.eventos.length > 5 && a.difs.length > 0);
+  const d = await call('GET', 'daf', null, { local: r.id, mes: a.mes }); assert.equal(Math.round(d.vendas), Math.round(r.mes.vendas)); assert.equal(Math.round(d.cmv), Math.round(r.mes.cmv));
+  console.log('OK — administração ao vivo');
+})().catch((e) => { console.error(e); process.exit(1); });

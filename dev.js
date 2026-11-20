@@ -8,7 +8,7 @@ const db = {
   q: async (t, p) => (await pg.query(t, p)).rows,
   tx: (fn) => pg.transaction((tx) => fn(async (t, p) => (await tx.query(t, p)).rows)),
 };
-const env = { AUTH_SECRET: 'dev-secret', ADMIN_PASSWORD: 'imbondeiro' };
+const env = { AUTH_SECRET: 'dev-secret', ADMIN_PASSWORD: 'imbondeiro', DEMO_AUTO: process.env.DEMO_AUTO || '' };
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
