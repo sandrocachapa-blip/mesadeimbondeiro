@@ -76,7 +76,11 @@ function pintarEstado() {
 /* ---------- Operações (aplicadas já no dispositivo, enviadas quando há rede) ---------- */
 const P = (id) => S.st.pedidos.find((p) => p.id === id);
 const linhaDe = (id) => { for (const p of S.st.pedidos) { const l = p.linhas.find((x) => x.id === id); if (l) return [p, l]; } return [null, null]; };
-const recalc = (p) => { p.total = Math.max(0, p.linhas.filter((l) => l.estado !== 'anulado').reduce((s, l) => s + l.preco * l.qtd, 0) - (p.desconto || 0)); };
+const recalc = (p) => {
+  const eid = p.id + '-emb', e = S.st.empresa || {}, emb = p.linhas.find((l) => l.id === eid); let n = 0;
+  if (p.tipo === 'takeaway' && e.emb_preco > 0) { const ls = p.linhas.filter((l) => l.id !== eid && l.estado !== 'anulado'); n = e.emb_modo === 'pedido' ? (ls.length ? 1 : 0) : ls.filter((l) => l.seccao === 'cozinha').reduce((s, l) => s + l.qtd, 0); }
+  if (!emb || emb.estado !== 'anulado') { if (n > 0) { if (emb) { emb.qtd = n; emb.preco = e.emb_preco; } else p.linhas.push({ id: eid, pedido_id: p.id, artigo_id: null, nome: 'Embalagem take-away', preco: e.emb_preco, qtd: n, notas: '', seccao: 'embalagem', estado: 'entregue', criado_em: new Date().toISOString() }); } else if (emb) p.linhas = p.linhas.filter((l) => l !== emb); }
+  p.total = Math.max(0, p.linhas.filter((l) => l.estado !== 'anulado').reduce((s, l) => s + l.preco * l.qtd, 0) - (p.desconto || 0)); };
 const pago = (p) => p.pagamentos.reduce((s, g) => s + g.valor, 0);
 function aplicar(o) {
   const d = o.d, st = S.st;
@@ -251,9 +255,9 @@ function vPedido(id) {
   <div class="cartao conta">
     ${p.linhas.length ? p.linhas.map((l) => `<div class="lin ${l.estado}">
       ${l.estado === 'novo' ? `<div class="qt"><button data-a="menos" data-id="${l.id}">−</button><b>${l.qtd}</b><button data-a="mais" data-id="${l.id}">+</button></div>` : `<b>${l.qtd}×</b>`}
-      <div class="n">${esc(l.nome)}<small>${l.notas ? esc(l.notas) + ' · ' : ''}<span class="est ${l.estado}">${ESTADOS[l.estado]}</span>${l.criado_por_nome === 'Cliente (QR)' && l.estado === 'novo' ? ' pedido pelo cliente' : ''}</small></div>
+      <div class="n">${esc(l.nome)}<small>${l.seccao === 'embalagem' && l.estado !== 'anulado' ? '<span class="est">juntada automaticamente</span>' : `<span class="est ${l.estado}">${ESTADOS[l.estado]}</span>`}${l.criado_por_nome === 'Cliente (QR)' && l.estado === 'novo' ? ' pedido pelo cliente' : ''}</small>${l.notas ? `<span class="obs-t">Obs.: ${esc(l.notas)}</span>` : ''}${l.estado === 'novo' ? `<button class="obs-b" data-a="nota" data-id="${l.id}">${l.notas ? 'Alterar obs.' : '+ Obs. (bem passado, sem batata…)'}</button>` : ''}</div>
       <span class="v">${kz(l.preco * l.qtd)}</span>
-      ${l.estado === 'novo' ? `<button class="btn s" data-a="nota" data-id="${l.id}" title="Nota para a cozinha">✎</button>` : (l.estado !== 'anulado' && pode('aprovar') ? `<button class="btn s perigo" data-a="anularL" data-id="${l.id}">Anular</button>` : '')}
+      ${l.estado === 'novo' ? '' : (l.estado !== 'anulado' && pode('aprovar') ? `<button class="btn s perigo" data-a="anularL" data-id="${l.id}">Anular</button>` : '')}
     </div>`).join('') : '<p class="mudo">Toque nos artigos para os juntar à conta.</p>'}
     <div style="margin-top:10px">
       ${p.desconto ? `<div class="tot-l"><span>Subtotal</span><span>${kz(bruto)}</span></div><div class="tot-l"><span>Desconto</span><span>− ${kz(p.desconto)}</span></div>` : ''}
@@ -304,6 +308,16 @@ function consulta(p) {
   window.print();
 }
 
+/* Observações ao pedido: opções mais usadas (configuráveis em Configuração → Empresa) e texto livre */
+const OBS_PADRAO = { cozinha: ['Bem passado', 'Médio', 'Mal passado', 'Sem batata', 'Só arroz', 'Com arroz e batata', 'Sem sal', 'Pouco sal', 'Sem jindungo', 'Com jindungo à parte', 'Sem cebola', 'Sem alho', 'Sem molho', 'Molho à parte', 'Sem ovo', 'Sem glúten', 'Alergia: avisar o chefe', 'Para dividir', 'Para levar', 'Servir depois das entradas'], bar: ['Sem gelo', 'Com gelo', 'Com limão', 'Sem açúcar', 'Natural', 'Bem fresca', 'Copo à parte', 'Com palhinha', 'Para levar'] };
+function obsOpcoes(sec) { const e = S.st.empresa, t = (sec === 'bar' ? e.obs_bar : e.obs_cozinha) || ''; const l = t.split(',').map((x) => x.trim()).filter(Boolean); return l.length ? l : OBS_PADRAO[sec === 'bar' ? 'bar' : 'cozinha']; }
+function mObs() {
+  const o = S.x.obs, [, l] = linhaDe(o.id); if (!l) return fechar();
+  modal(`<h2>Obs. — ${esc(l.nome)}</h2><p class="mudo" style="margin:4px 0 10px">Toque nas alterações pedidas pelo cliente. Seguem com o pedido para ${l.seccao === 'bar' ? 'o bar' : 'a cozinha'}.</p>
+    <div class="obs-op">${obsOpcoes(l.seccao).map((v) => `<button class="${o.sel.includes(v) ? 'on' : ''}" data-a="obsTroca" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>
+    <label>Outra observação</label><input id="obsLivre" value="${esc(o.livre || '')}" placeholder="Escreva aqui o que não estiver na lista" autocomplete="off">
+    <div class="fila" style="margin-top:16px"><button class="btn s" data-a="obsLimpa">Limpar</button><span class="esp"></span><button class="btn" data-a="fechar">Cancelar</button><button class="btn p" data-a="obsOk">Guardar obs.</button></div>`, 'larga');
+}
 /* Retirar produtos do menu temporariamente (por local): somem do menu digital e ficam bloqueados nos pedidos */
 function mDisp() {
   const st = S.st, sec = S.x.dispSec, fams = st.familias.filter((f) => !sec || f.seccao === sec), n = st.artigos.filter((a) => a.fora).length;
@@ -406,7 +420,7 @@ function vCfg() {
   if (tab === 'mesas') corpo = T(['Mesa', 'Zona', 'Local', 'Lugares', 'Activa'], d.mesas.map((m) => [m.id, esc(m.nome), esc(m.zona), esc(loc(m.local_id)), m.lugares, sn(m.activo)]));
   if (tab === 'locais') corpo = T(['Local', 'Tipo', 'Morada', 'Endereço do menu', 'Activo'], d.locais.map((l) => [l.id, esc(l.nome), esc(l.tipo), esc(l.morada), '/menu?l=' + esc(l.slug), sn(l.activo)]));
   if (tab === 'utilizadores') corpo = T(['Nome', 'Utilizador', 'Perfil', 'Local', 'Activo'], d.utilizadores.map((u) => [u.id, esc(u.nome), esc(u.login), PERFIS[u.perfil] || u.perfil, esc(loc(u.local_id)), sn(u.activo)]));
-  if (tab === 'empresa') { const e = d.empresa; corpo = `<table><tr><td>Nome</td><td>${esc(e.nome)}</td></tr><tr><td>NIF</td><td>${esc(e.nif) || '—'}</td></tr><tr><td>Regime de IVA</td><td>${esc(e.regime_iva)}</td></tr><tr><td>Taxa de IVA incluída nos preços</td><td>${e.taxa_iva}%</td></tr><tr><td>Software de facturação certificado</td><td>${esc(e.factura_software) || 'por definir'}</td></tr><tr><td>Aspecto</td><td>${e.tema === 'luxo' ? 'Luxo — preto e dourado' : 'Clássico — terracota e creme'}</td></tr></table>
+  if (tab === 'empresa') { const e = d.empresa; corpo = `<table><tr><td>Nome</td><td>${esc(e.nome)}</td></tr><tr><td>NIF</td><td>${esc(e.nif) || '—'}</td></tr><tr><td>Regime de IVA</td><td>${esc(e.regime_iva)}</td></tr><tr><td>Taxa de IVA incluída nos preços</td><td>${e.taxa_iva}%</td></tr><tr><td>Software de facturação certificado</td><td>${esc(e.factura_software) || 'por definir'}</td></tr><tr><td>Embalagem de take-away</td><td>${e.emb_preco > 0 ? kz(e.emb_preco) + (e.emb_modo === 'pedido' ? ' por pedido' : ' por prato') : 'não é cobrada'}</td></tr><tr><td>Aspecto</td><td>${e.tema === 'luxo' ? 'Luxo — preto e dourado' : 'Clássico — terracota e creme'}</td></tr></table>
     <div class="aviso" style="margin:16px 0 0"><b>Dados fictícios de demonstração.</b> Preenchem todos os menus com vendas, stock, compras, equipa, salários, finanças, reservas e um segundo local de exemplo. Podem ser apagados de uma vez, sem tocar nos dados reais.<div class="fila" style="margin-top:10px"><button class="btn" data-a="demo" data-ac="carregar">Carregar dados fictícios</button><button class="btn perigo" data-a="demo" data-ac="apagar">Apagar dados fictícios</button></div></div>`; }
   return `<div class="cab"><h1>Configuração</h1><span class="esp"></span><button class="btn p" data-a="cfgEdit" data-id="">${tab === 'empresa' ? 'Editar dados da empresa' : 'Novo registo'}</button></div>
     <div class="tabs">${tabs.map((t) => `<button class="chip ${t[0] === tab ? 'on' : ''}" data-a="cfgTab" data-id="${t[0]}">${t[1]}</button>`).join('')}</div><div class="cartao" style="overflow:auto">${corpo}</div>`;
@@ -421,7 +435,7 @@ function cfgForm(id) {
     mesas: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'zona', label: 'Zona', value: r.zona || 'Sala' }, { k: 'local_id', label: 'Local', type: 'select', options: optLoc, value: r.local_id || S.local }, { k: 'lugares', label: 'Lugares', type: 'number', value: r.lugares || 4 }, { k: 'ordem', label: 'Ordem', type: 'number' }, { k: 'activo', label: 'Activa', type: 'check', value: novo ? true : r.activo }],
     locais: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'tipo', label: 'Tipo', type: 'select', options: [['restaurante', 'Restaurante'], ['bar', 'Bar'], ['esplanada', 'Esplanada'], ['takeaway', 'Take-away']] }, { k: 'morada', label: 'Morada' }, { k: 'slug', label: 'Endereço do menu (sem espaços)', ph: 'ex.: ilha-de-luanda' }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
     utilizadores: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'login', label: 'Nome de utilizador', req: 1 }, { k: 'perfil', label: 'Perfil', type: 'select', options: Object.entries(PERFIS) }, { k: 'local_id', label: 'Local', type: 'select', options: [['', 'Todos os locais']].concat(optLoc) }, { k: 'password', label: novo ? 'Palavra-passe (mín. 6 caracteres)' : 'Nova palavra-passe (vazio = manter)', type: 'password' }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
-    empresa: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'nif', label: 'NIF' }, { k: 'regime_iva', label: 'Regime de IVA', type: 'select', options: [['geral', 'Geral'], ['simplificado', 'Simplificado'], ['exclusao', 'Exclusão']] }, { k: 'taxa_iva', label: 'Taxa de IVA incluída nos preços (%) — confirme com o contabilista', type: 'number' }, { k: 'factura_software', label: 'Software de facturação certificado a ligar', ph: 'ex.: Primavera' }, { k: 'inss_taxa', label: 'Segurança Social a cargo do trabalhador (%) — confirme com o contabilista', type: 'number' }, { k: 'tema', label: 'Aspecto da app e do menu digital', type: 'select', options: [['classico', 'Clássico — terracota e creme'], ['luxo', 'Luxo — preto e dourado, para restaurantes de alto nível']] }],
+    empresa: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'nif', label: 'NIF' }, { k: 'regime_iva', label: 'Regime de IVA', type: 'select', options: [['geral', 'Geral'], ['simplificado', 'Simplificado'], ['exclusao', 'Exclusão']] }, { k: 'taxa_iva', label: 'Taxa de IVA incluída nos preços (%) — confirme com o contabilista', type: 'number' }, { k: 'factura_software', label: 'Software de facturação certificado a ligar', ph: 'ex.: Primavera' }, { k: 'inss_taxa', label: 'Segurança Social a cargo do trabalhador (%) — confirme com o contabilista', type: 'number' }, { k: 'emb_preco', label: 'Preço da embalagem de take-away (Kz) — 0 para não cobrar', type: 'number' }, { k: 'emb_modo', label: 'Cobrar a embalagem', type: 'select', options: [['prato', 'Por cada prato da cozinha'], ['pedido', 'Uma vez por pedido']] }, { k: 'obs_cozinha', label: 'Observações rápidas da cozinha, separadas por vírgulas (vazio = lista padrão)', ph: 'Bem passado, Sem batata, Só arroz…' }, { k: 'obs_bar', label: 'Observações rápidas do bar, separadas por vírgulas (vazio = lista padrão)', ph: 'Sem gelo, Com limão…' }, { k: 'tema', label: 'Aspecto da app e do menu digital', type: 'select', options: [['classico', 'Clássico — terracota e creme'], ['luxo', 'Luxo — preto e dourado, para restaurantes de alto nível']] }],
   }[tab].map((c) => (c.value === undefined ? Object.assign(c, { value: r[c.k] }) : c));
   form((novo && tab !== 'empresa' ? 'Novo registo' : 'Editar') + ' — ' + CFG_TABS.find((t) => t[0] === tab)[1], campos, async (v) => {
     const pl = v.preco_local; delete v.preco_local;
@@ -480,7 +494,11 @@ const ACOES = {
   add: (el) => { const p = P(rota().id); if (!p) return; const ar = S.st.artigos.find((x) => x.id === el.dataset.id); if (ar && ar.fora) return toast(ar.nome + ' está temporariamente indisponível', 'erro'); const l = p.linhas.find((x) => x.artigo_id === el.dataset.id && x.estado === 'novo' && !x.notas); if (l) op('linha.qtd', { id: l.id, qtd: l.qtd + 1 }); else op('linha.add', { id: uuid(), pedido_id: p.id, artigo_id: el.dataset.id, qtd: 1 }); render(); },
   mais: (el) => { const [, l] = linhaDe(el.dataset.id); if (l) { op('linha.qtd', { id: l.id, qtd: l.qtd + 1 }); render(); } },
   menos: (el) => { const [, l] = linhaDe(el.dataset.id); if (l) { op('linha.qtd', { id: l.id, qtd: l.qtd - 1 }); render(); } },
-  nota: (el) => { const [, l] = linhaDe(el.dataset.id); if (l) form('Nota para ' + l.nome, [{ k: 'notas', label: 'Nota (ex.: sem jindungo, mal passado)', value: l.notas }], (v) => { op('linha.qtd', { id: l.id, qtd: l.qtd, notas: v.notas }); render(); }); },
+  nota: (el) => { const [, l] = linhaDe(el.dataset.id); if (!l) return; const ops = obsOpcoes(l.seccao), partes = (l.notas || '').split(',').map((x) => x.trim()).filter(Boolean);
+    S.x.obs = { id: l.id, sel: partes.filter((x) => ops.includes(x)), livre: partes.filter((x) => !ops.includes(x)).join(', ') }; mObs(); },
+  obsTroca: (el) => { const o = S.x.obs, v = el.dataset.v, k = o.sel.indexOf(v); o.livre = $('#obsLivre').value; if (k >= 0) o.sel.splice(k, 1); else o.sel.push(v); mObs(); },
+  obsOk: () => { const o = S.x.obs, [, l] = linhaDe(o.id); if (l) op('linha.qtd', { id: l.id, qtd: l.qtd, notas: o.sel.concat($('#obsLivre').value.trim() ? [$('#obsLivre').value.trim()] : []).join(', ') }); fechar(); render(); },
+  obsLimpa: () => { S.x.obs.sel = []; S.x.obs.livre = ''; mObs(); },
   anularL: (el) => form('Anular linha', [{ k: 'motivo', label: 'Motivo', req: 1 }], (v) => { op('linha.anular', { id: el.dataset.id, motivo: v.motivo }); render(); }),
   enviar: (el) => { if (op('pedido.enviar', { pedido_id: el.dataset.id })) { toast('Pedido enviado'); S.x.verConta = false; render(); } },
   desconto: (el) => { const p = P(el.dataset.id); form('Desconto na conta', [{ k: 'valor', label: 'Valor do desconto (Kz)', type: 'number', value: p.desconto || '' }], (v) => { op('pedido.desconto', { pedido_id: p.id, valor: Math.max(0, Number(v.valor) || 0) }); render(); }); },

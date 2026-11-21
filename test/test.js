@@ -325,3 +325,34 @@ global.__t1 = (async () => {
   assert.equal((await raw('GET', 'disponibilidade', null, { local: L })).json.fora.length, 0);
   console.log('OK — produtos indisponíveis');
 })().catch((e) => { console.error(e); process.exit(1); });
+// ---- Embalagem de take-away automática ----
+(async () => {
+  await global.__t1; await new Promise((r) => setTimeout(r, 26000));
+  const { PGlite } = require('@electric-sql/pglite');
+  const core = require('../lib/core'); core._reset();
+  const pg = new PGlite();
+  const db = { q: async (t, p) => (await pg.query(t, p)).rows, tx: (fn) => pg.transaction((tx) => fn(async (t, p) => (await tx.query(t, p)).rows)) };
+  const env = { AUTH_SECRET: 's', ADMIN_PASSWORD: 'segredo1' };
+  let token = '';
+  const call = async (method, path, body, query) => { const r = await core.handle(db, env, { method, path: '/api/' + path, body, query: query || {}, token }); if (r.status !== 200) throw new Error(path + ' -> ' + r.status + ' ' + JSON.stringify(r.json)); return r.json; };
+  const ops = async (...l) => { const r = (await call('POST', 'ops', { ops: l.map((o) => ({ id: 'o' + Math.random(), ts: new Date().toISOString(), ...o })) })).resultados; assert.ok(r.every((x) => x.ok), JSON.stringify(r)); };
+  token = (await call('POST', 'login', { login: 'admin', password: 'segredo1' })).token;
+  let st = await call('GET', 'state'); const L = st.local.id, muf = st.artigos.find((a) => a.nome === 'Mufete').id, cafe = st.artigos.find((a) => a.nome === 'Café').id;
+  assert.equal(st.empresa.emb_preco, 300); assert.equal(st.empresa.emb_modo, 'prato');
+  const ped = async (id) => (await call('GET', 'state')).pedidos.find((p) => p.id === id);
+  await ops({ tipo: 'pedido.abrir', d: { id: 'tk', local_id: L, tipo: 'takeaway' } }, { tipo: 'linha.add', d: { id: 'a', pedido_id: 'tk', artigo_id: cafe, qtd: 2 } });
+  assert.equal((await ped('tk')).total, 2000);                                                       // só bebidas: sem embalagem
+  await ops({ tipo: 'linha.add', d: { id: 'b', pedido_id: 'tk', artigo_id: muf, qtd: 2 } });
+  let p = await ped('tk'), e = p.linhas.find((l) => l.nome === 'Embalagem take-away'); assert.equal(e.qtd, 2); assert.equal(p.total, 2000 + 29000 + 600);
+  await ops({ tipo: 'linha.qtd', d: { id: 'b', qtd: 3 } }); p = await ped('tk'); assert.equal(p.linhas.find((l) => l.id === 'tk-emb').qtd, 3); assert.equal(p.total, 2000 + 43500 + 900);
+  await ops({ tipo: 'pedido.enviar', d: { pedido_id: 'tk' } }); assert.equal((await ped('tk')).linhas.find((l) => l.id === 'tk-emb').estado, 'entregue'); // não vai para a cozinha
+  await ops({ tipo: 'pedido.abrir', d: { id: 'bl', local_id: L, tipo: 'balcao' } }, { tipo: 'linha.add', d: { id: 'c', pedido_id: 'bl', artigo_id: muf, qtd: 1 } });
+  assert.equal((await ped('bl')).total, 14500);                                                       // balcão: sem embalagem
+  await call('POST', 'cfg', { entidade: 'empresa', linha: { ...st.empresa, emb_preco: 500, emb_modo: 'pedido' } });
+  await ops({ tipo: 'linha.add', d: { id: 'd', pedido_id: 'tk', artigo_id: cafe, qtd: 1 } }); p = await ped('tk'); e = p.linhas.find((l) => l.id === 'tk-emb'); assert.equal(e.qtd, 1); assert.equal(e.preco, 500);
+  await ops({ tipo: 'linha.anular', d: { id: 'tk-emb', motivo: 'cliente trouxe caixa' } }, { tipo: 'linha.add', d: { id: 'f', pedido_id: 'tk', artigo_id: cafe, qtd: 1 } });
+  p = await ped('tk'); assert.equal(p.linhas.find((l) => l.id === 'tk-emb').estado, 'anulado'); assert.equal(p.total, 4000 + 43500);                      // dispensada pelo gerente: não volta
+  await ops({ tipo: 'pedido.abrir', d: { id: 't2', local_id: L, tipo: 'takeaway' } }, { tipo: 'linha.add', d: { id: 'g', pedido_id: 't2', artigo_id: muf, qtd: 1 } }, { tipo: 'pedido.transferir', d: { pedido_id: 't2', mesa_id: st.mesas[0].id } });
+  assert.equal((await ped('t2')).total, 14500);                                                       // passou para mesa: embalagem sai
+  console.log('OK — embalagem de take-away');
+})().catch((e) => { console.error(e); process.exit(1); });

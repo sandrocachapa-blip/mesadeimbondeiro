@@ -332,3 +332,11 @@ body.kds-full .kds { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)
 .disp button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid #BFD9C2; background: #EEF7EF; color: var(--castanho); box-shadow: 0 2px 0 #BFD9C2; min-height: 56px; }
 .disp button b { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #2A6B31; }
 .disp button.fora { background: #FFE4E0; border-color: #E8A49D; box-shadow: 0 2px 0 #E8A49D; } .disp button.fora span { text-decoration: line-through; } .disp button.fora b { color: #C8221A; }
+
+/* ================= Versão 13: observações ao pedido ================= */
+.obs-t { display: block; font-size: 13px; font-style: italic; color: var(--terra-2); margin-top: 2px; }
+.obs-b { display: block; background: none; border: 0; padding: 4px 0 0; font-size: 13px; font-weight: 700; color: var(--terra); text-decoration: underline; cursor: pointer; text-align: left; }
+.obs-op { display: flex; flex-wrap: wrap; gap: 8px; }
+.obs-op button { border: 1px solid #C9B08C; background: linear-gradient(180deg, #FFFDF8, #F3E6D0); box-shadow: 0 2px 0 #C9B08C; border-radius: 99px; padding: 10px 16px; font-weight: 600; color: var(--castanho); min-height: 44px; }
+.obs-op button.on { background: linear-gradient(180deg, #CC5A31, var(--terra)); border-color: #8F3013; box-shadow: 0 2px 0 #7A2A10; color: #fff; }
+.tic button small i { font-weight: 700; color: var(--terra); font-size: 14px; }
