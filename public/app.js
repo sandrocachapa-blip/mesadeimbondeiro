@@ -159,7 +159,7 @@ function menus() {
   if (pode('cfg')) g.push({ g: 'Stock e compras', i: [['stock', 'Stock'], ['compras', 'Compras'], ['fornecedores', 'Fornecedores'], ['fichas', 'Fichas e custos']] });
   if (pode('aprovar')) g.push({ g: 'Pessoas e dinheiro', i: [['equipa', 'Equipa e ponto'], ['salarios', 'Salários'], ['daf', 'Finanças (DAF)']] });
   else g[0].i.push(['equipa', 'Ponto']);
-  if (pode('aprovar')) { const m = pode('admin') ? [['admin', 'Administração ao vivo']] : []; m.push(['painel', 'Painel e alertas'], ['relatorios', 'Relatórios']); if (pode('admin')) m.push(['grupo', 'Grupo']); m.push(['menu', 'Menu digital'], ['config', 'Configuração']); g.push({ g: 'Gestão', i: m }); }
+  if (pode('aprovar')) { const m = pode('admin') ? [['admin', 'Administração ao vivo']] : []; m.push(['artigos', 'Carta e artigos'], ['painel', 'Painel e alertas'], ['relatorios', 'Relatórios']); if (pode('admin')) m.push(['grupo', 'Grupo']); m.push(['menu', 'Menu digital'], ['config', 'Configuração']); g.push({ g: 'Gestão', i: m }); }
   return g;
 }
 const VIEWS = {};
@@ -285,7 +285,7 @@ function vPedido(id) {
   if (!(S.fam === 'todos' || (S.fam === 'fav' && temFav) || daCarta.some((f) => f.id === S.fam))) S.fam = temFav && !S.fam ? 'fav' : (daCarta[0] || st.familias[0] || {}).id;
   const novos = p.linhas.filter((l) => l.estado === 'novo').length, itens = p.linhas.filter((l) => l.estado !== 'anulado' && !AUTO.includes(l.seccao)).reduce((s, l) => s + l.qtd, 0), nFora = st.artigos.filter((a) => a.fora).length;
   return `<div class="pedido pdv ${S.x.verConta ? 'vc' : ''}"><div class="carta pdv-e">
-    <div class="pdv-b"><a class="btn az" href="#mesas">${ICO.volta}Voltar</a><input id="busca" type="search" placeholder="(F4) Procurar artigo…" value="${esc(S.x.busca || '')}" autocomplete="off"><button class="btn" data-a="disp">Indisponíveis${nFora ? ' (' + nFora + ')' : ''}</button><button class="btn" data-a="semImg" title="Mostrar ou esconder as imagens">${ls.get('semImg', false) ? 'Com imagens' : 'Só texto'}</button></div>
+    <div class="pdv-b"><a class="btn az" href="#mesas">${ICO.volta}Voltar</a><input id="busca" type="search" placeholder="(F4) Procurar artigo…" value="${esc(S.x.busca || '')}" autocomplete="off"><button class="btn" data-a="disp">Indisponíveis${nFora ? ' (' + nFora + ')' : ''}</button><button class="btn" data-a="semImg" title="Mostrar ou esconder as imagens">${ls.get('semImg', false) ? 'Com imagens' : 'Só texto'}</button>${pode('cfg') ? '<button class="btn vdb" data-a="artNovo" title="Criar um artigo novo na carta">+ Artigo</button>' : ''}</div>
     <div class="seg" style="margin-bottom:8px"><button class="${S.x.carta !== 'vinhos' ? 'on' : ''}" data-a="carta" data-c="menu">Menu</button><button class="${S.x.carta === 'vinhos' ? 'on' : ''}" data-a="carta" data-c="vinhos">Vinhos e bebidas alcoólicas</button></div>
     <div class="chips">${chipsFam(daCarta, temFav)}</div>
     <div class="arts" id="arts">${artsHtml(p)}</div>
@@ -508,8 +508,8 @@ function vCfg() {
   return `<div class="cab"><h1>Configuração</h1><span class="esp"></span><button class="btn p" data-a="cfgEdit" data-id="">${tab === 'empresa' ? 'Editar dados da empresa' : 'Novo registo'}</button></div>
     <div class="tabs">${tabs.map((t) => `<button class="chip ${t[0] === tab ? 'on' : ''}" data-a="cfgTab" data-id="${t[0]}">${t[1]}</button>`).join('')}</div><div class="cartao" style="overflow:auto">${corpo}</div>`;
 }
-function cfgForm(id) {
-  const d = S.x.cfg.d, tab = S.x.cfgTab, r = tab === 'empresa' ? d.empresa : (d[tab].find((x) => x.id === id) || {}), novo = !r.id;
+function cfgForm(id, tabF, pre) {
+  const d = S.x.cfg.d, tab = tabF || S.x.cfgTab, r = tab === 'empresa' ? d.empresa : (d[tab].find((x) => x.id === id) || Object.assign({}, pre)), novo = !r.id;
   const optLoc = d.locais.map((l) => [l.id, l.nome]);
   const campos = {
     artigos: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'familia_id', label: 'Família', type: 'select', options: d.familias.map((f) => [f.id, f.nome]) }, { k: 'descricao', label: 'Descrição (aparece no menu digital)' }, { k: 'preco', label: 'Preço base (Kz)', type: 'number', req: 1 },
@@ -652,9 +652,11 @@ document.addEventListener('submit', async (e) => {
     render(); sync();
   } catch (er) { toast(er.message, 'erro'); }
 });
-document.addEventListener('change', (e) => { if (e.target.id === 'selLocal') { if (S.queue.length) { toast('Aguarde a sincronização antes de mudar de local', 'erro'); e.target.value = S.local; return; } S.local = e.target.value; S.x = {}; S.st = null; guardar(); render(); sync(); } });
+document.addEventListener('change', (e) => { if (e.target.id === 'fotoF' && e.target.files[0]) { const im = e.target.closest('.foto-f').querySelector('img'); if (im) im.src = URL.createObjectURL(e.target.files[0]); }
+  if (e.target.id === 'selLocal') { if (S.queue.length) { toast('Aguarde a sincronização antes de mudar de local', 'erro'); e.target.value = S.local; return; } S.local = e.target.value; S.x = {}; S.st = null; guardar(); render(); sync(); } });
 window.addEventListener('hashchange', () => { if (!['cozinha', 'bar'].includes(rota().v)) document.body.classList.remove('kds-full'); fechar(); document.body.classList.remove('menu-on'); Object.keys(S.x).forEach((k) => { if (S.x[k] && typeof S.x[k] === 'object' && 'pronto' in S.x[k]) delete S.x[k]; }); render(); });
-document.addEventListener('input', (e) => { if (e.target.id === 'busca') { S.x.busca = e.target.value; const p = P(rota().id); if (p) $('#arts').innerHTML = artsHtml(p); } });
+document.addEventListener('input', (e) => { if (e.target.id === 'buscaArt') { S.x.artB = e.target.value; const g = $('#artG'); if (g) g.innerHTML = artGrelha(); return; }
+  if (e.target.id === 'busca') { S.x.busca = e.target.value; const p = P(rota().id); if (p) $('#arts').innerHTML = artsHtml(p); } });
 /* Arrastar mesas na planta (modo de edição) */
 let arr = null;
 document.addEventListener('pointerdown', (e) => { const el = e.target.closest('.planta.editar .pm'); if (!el) return; e.preventDefault(); arr = { el, id: el.dataset.id, x0: e.clientX, y0: e.clientY, mexeu: false }; });

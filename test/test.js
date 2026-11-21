@@ -412,6 +412,17 @@ global.__t1 = (async () => {
   p = await ped('e1'); assert.equal(p.entrega_estado, 'caminho'); assert.equal(p.estafeta, 'João');
   await ops({ tipo: 'pedido.enviar', d: { pedido_id: 'e1' } }); p = await ped('e1'); assert.equal(p.linhas.filter((l) => l.estado === 'enviado').length, 1);          // só o prato vai para a cozinha
   r = await ops({ tipo: 'pedido.cliente', d: { pedido_id: 'm1', cliente_nome: 'Empresa X, Lda', cliente_nif: '5417000099' } }); assert.ok(r[0].ok); p = await ped('m1'); assert.equal(p.cliente_nome, 'Empresa X, Lda'); assert.equal(p.cliente_nif, '5417000099');
+  // gerir artigos: apagar só sem vendas, famílias vazias, preços em lote
+  assert.equal((await raw('POST', 'cfg', { entidade: 'artigos', apagar: muf.id })).status, 409);
+  let cg = await call('GET', 'cfg'); assert.equal(cg.artigos.find((a) => a.id === muf.id).vendido, true); assert.equal(cg.artigos.find((a) => a.id === novo.id).vendido, false);
+  await call('POST', 'cfg', { entidade: 'artigos', apagar: novo.id }); cg = await call('GET', 'cfg'); assert.ok(!cg.artigos.find((a) => a.id === novo.id));
+  const fam = await call('POST', 'cfg', { entidade: 'familias', linha: { nome: 'Sazonais', seccao: 'cozinha', carta: 'menu', ordem: 9 } });
+  const tmp = await call('POST', 'cfg', { entidade: 'artigos', linha: { nome: 'Sopa do dia', familia_id: fam.id, preco: 2130 } });
+  assert.equal((await raw('POST', 'cfg', { entidade: 'familias', apagar: fam.id })).status, 409);
+  const lote = await call('POST', 'cfg', { entidade: 'precos_lote', linha: { familia_id: fam.id, pct: 10, arredondar: 50 } }); assert.equal(lote.n, 1);
+  cg = await call('GET', 'cfg'); assert.equal(cg.artigos.find((a) => a.id === tmp.id).preco, 2350); assert.equal(cg.artigos.find((a) => a.id === cafe.id).preco, 1000);
+  await call('POST', 'cfg', { entidade: 'artigos', apagar: tmp.id }); await call('POST', 'cfg', { entidade: 'familias', apagar: fam.id });
+  token = ''; assert.equal((await raw('POST', 'cfg', { entidade: 'artigos', apagar: cafe.id })).status, 401); token = tk;
   // dados fictícios trazem bairros e entregas
   await call('POST', 'demo', { acao: 'carregar' }); st = await call('GET', 'state'); assert.ok(st.bairros.length >= 6); assert.equal(st.pedidos.filter((x) => x.id.startsWith('demo-en-')).length, 2);
   await call('POST', 'demo', { acao: 'apagar' }); st = await call('GET', 'state'); assert.equal(st.bairros.length, 1);
