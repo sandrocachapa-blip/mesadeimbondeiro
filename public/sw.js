@@ -1,6 +1,6 @@
 // Mesa de Imbondeiro — guarda a aplicação no dispositivo para abrir sem rede.
-const CACHE = 'mdi-v11';
-const SHELL = ['/', '/app.js', '/modulos.js', '/styles.css', '/logo.png', '/icon-192.png', '/manifest.webmanifest'];
+const CACHE = 'mdi-v12';
+const SHELL = ['/', '/app.js', '/modulos.js', '/styles.css', '/luxo.css', '/logo.png', '/icon-192.png', '/manifest.webmanifest'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', (e) => {

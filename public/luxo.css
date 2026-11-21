@@ -1,0 +1,103 @@
+/* Mesa de Imbondeiro — tema «Luxo»: preto, dourado e branco-marfim, para restaurantes de alto nível.
+   Activa-se em Configuração → Empresa → Aspecto. Só muda o aspecto; as funções são as mesmas. */
+body.tema-luxo {
+  --creme: #0B0A08; --areia: #1A1814; --linha: #2E2A20; --castanho: #EFE6D2; --castanho-2: #A99C82; --terra: #C9A961; --terra-2: #A8893F; --branco: #14120E;
+  --ouro: #C9A961; --ouro-2: #E7D3A1; --ouro-3: #8C7335; --painel: #14120E; --painel-2: #1C1914;
+  --titulo: 'Playfair Display', 'Cormorant Garamond', Georgia, 'Times New Roman', serif; --caps: 'Cinzel', 'Playfair Display', Georgia, serif;
+  background: radial-gradient(1100px 520px at 78% -8%, #1D1910 0%, #0B0A08 58%) fixed; color: var(--castanho);
+}
+.tema-luxo h1, .tema-luxo h2, .tema-luxo h3 { color: #F6EEDC; font-weight: 600; letter-spacing: .01em; text-shadow: none; }
+.tema-luxo h1 { font-size: 28px; } .tema-luxo h1::after { content: ''; display: block; width: 46px; height: 1px; margin-top: 6px; background: linear-gradient(90deg, var(--ouro), transparent); }
+.tema-luxo .cab h1::after { display: none; }
+.tema-luxo h3, .tema-luxo th, .tema-luxo label, .tema-luxo .adm-s small { font-family: var(--caps); letter-spacing: .12em; text-transform: uppercase; font-weight: 500; }
+.tema-luxo h3 { font-size: 12.5px; color: var(--ouro); } .tema-luxo label { font-size: 11px; color: var(--castanho-2); }
+.tema-luxo a { color: var(--ouro-2); }
+.tema-luxo input, .tema-luxo select, .tema-luxo textarea { background: #0F0E0B; border: 1px solid var(--linha); color: var(--castanho); border-radius: 4px; color-scheme: dark; }
+.tema-luxo input:focus, .tema-luxo select:focus { outline: 1px solid var(--ouro); border-color: var(--ouro); }
+.tema-luxo .mudo { color: var(--castanho-2); }
+
+/* Menu lateral e topo */
+.tema-luxo .lado { background: linear-gradient(180deg, #100F0C, #070605); border-right: 1px solid var(--linha); box-shadow: none; }
+.tema-luxo .lado .marca { font-family: var(--caps); font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: var(--ouro-2); }
+.tema-luxo .lado .marca img, .tema-luxo .login img { filter: brightness(0) invert(1) sepia(1) saturate(2.2) hue-rotate(2deg) brightness(.86); background: none; box-shadow: none; }
+.tema-luxo .lado .marca img { border: 1px solid var(--ouro-3); border-radius: 50%; padding: 6px; }
+.tema-luxo .lado select, .tema-luxo .lado .loc { background: transparent; border: 1px solid var(--linha); border-radius: 4px; color: var(--castanho); }
+.tema-luxo .lado select option { color: #000; }
+.tema-luxo .grp { background: none; border: 0; border-top: 1px solid var(--linha); border-radius: 0; margin-top: 0; } .tema-luxo .grp.act { background: none; }
+.tema-luxo .gh { font: 500 13px/1.2 var(--caps); letter-spacing: .16em; text-transform: uppercase; color: #D9CDB2; padding: 16px 8px; }
+.tema-luxo .gh span::before { background: none; border: 1px solid var(--ouro-3); width: 6px; height: 6px; border-radius: 0; box-shadow: none; } .tema-luxo .grp.act .gh span::before { background: var(--ouro); box-shadow: none; } .tema-luxo .grp.act .gh { color: var(--ouro-2); }
+.tema-luxo .lado .sub a { border-left: 1px solid var(--linha); color: #BDB198; font-family: var(--titulo); font-size: 15.5px; font-weight: 400; border-radius: 0; }
+.tema-luxo .lado .sub a:hover { background: none; color: var(--ouro-2); }
+.tema-luxo .lado .sub a.on { background: none; box-shadow: none; transform: none; color: var(--ouro-2); border-left: 2px solid var(--ouro); margin-left: 10px; padding-left: 15px; font-style: italic; }
+.tema-luxo .topo { background: rgba(11, 10, 8, .88); border-bottom: 1px solid var(--linha); color: var(--castanho); }
+.tema-luxo .topo .tit { font-family: var(--caps); font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--ouro-2); font-weight: 500; }
+.tema-luxo .topo .eu, .tema-luxo .ham { color: var(--castanho); }
+.tema-luxo .pill { background: transparent; border: 1px solid #4E7A4A; color: #9CC79A; font-weight: 500; letter-spacing: .06em; } .tema-luxo .pill.off { border-color: var(--ouro); color: var(--ouro-2); background: transparent; }
+
+/* Cartões, botões, tabelas */
+.tema-luxo .cartao { background: linear-gradient(180deg, #171511, #12100D); border: 1px solid var(--linha); border-radius: 6px; box-shadow: 0 24px 40px -28px #000; }
+.tema-luxo .kpi { font-family: var(--caps); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--castanho-2); border-top: 1px solid var(--ouro-3); }
+.tema-luxo .kpi b { font-family: var(--titulo); font-size: 27px; letter-spacing: 0; text-transform: none; color: var(--ouro-2); font-weight: 500; text-shadow: none; margin-top: 4px; }
+.tema-luxo .kpi small { font-family: var(--texto); letter-spacing: 0; text-transform: none; color: var(--castanho-2); } .tema-luxo .kpi small.sobe { color: #9CC79A; } .tema-luxo .kpi small.desce, .tema-luxo .kpi b.neg { color: #E08A80; }
+.tema-luxo .btn { background: transparent; border: 1px solid var(--ouro-3); color: var(--ouro-2); border-radius: 3px; box-shadow: none; font-family: var(--caps); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; font-weight: 500; }
+.tema-luxo .btn:hover { background: rgba(201, 169, 97, .1); } .tema-luxo .btn:active { transform: none; box-shadow: none; background: rgba(201, 169, 97, .2); }
+.tema-luxo .btn.p { background: linear-gradient(180deg, #E2CB90, #B8963F); border-color: #B8963F; color: #14110A; box-shadow: 0 10px 24px -14px rgba(201, 169, 97, .8); font-weight: 600; }
+.tema-luxo .btn.p:hover { background: linear-gradient(180deg, #EFDCA8, #C5A34A); } .tema-luxo .btn.p:active { box-shadow: none; }
+.tema-luxo .btn.perigo { border-color: #7C3A33; color: #E08A80; } .tema-luxo .btn.s { font-size: 11px; box-shadow: none; } .tema-luxo .btn.s.p { box-shadow: none; }
+.tema-luxo .chip { background: transparent; border: 1px solid var(--linha); color: #CFC3A8; border-radius: 2px; box-shadow: none; font-family: var(--caps); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; font-weight: 500; }
+.tema-luxo .chip.on { background: transparent; border-color: var(--ouro); color: var(--ouro-2); box-shadow: inset 0 -2px 0 var(--ouro); }
+.tema-luxo .seg { background: #0F0E0B; border: 1px solid var(--linha); border-radius: 3px; box-shadow: none; } .tema-luxo .seg button { color: var(--castanho-2); border-radius: 2px; font-family: var(--caps); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+.tema-luxo .seg button.on { background: var(--ouro); color: #14110A; box-shadow: none; }
+.tema-luxo th { border-bottom: 1px solid var(--ouro-3); color: var(--ouro); font-size: 10.5px; } .tema-luxo td { border-bottom: 1px solid #221F18; } .tema-luxo tr.clic:hover td { background: rgba(201, 169, 97, .07); }
+.tema-luxo .aviso { background: #16140F; border-left: 2px solid var(--ouro); border-radius: 2px; color: #D9CDB2; } .tema-luxo .ferr { background: #16140F; box-shadow: none; }
+.tema-luxo .est { background: transparent; border: 1px solid var(--linha); color: #CFC3A8; border-radius: 2px; font-weight: 500; }
+.tema-luxo .est.ok, .tema-luxo .est.pronto, .tema-luxo .est.entregue { border-color: #4E7A4A; color: #9CC79A; background: transparent; } .tema-luxo .est.pendente, .tema-luxo .est.enviado, .tema-luxo .est.novo { border-color: var(--ouro-3); color: var(--ouro-2); background: transparent; } .tema-luxo .est.erro, .tema-luxo .est.preparar { border-color: #7C3A33; color: #E08A80; background: transparent; }
+.tema-luxo #modal { background: rgba(0, 0, 0, .78); } .tema-luxo #modal .cx { background: #12100D; border: 1px solid var(--ouro-3); border-radius: 4px; box-shadow: 0 40px 80px -20px #000; }
+.tema-luxo #toast div { background: #1C1914; border: 1px solid var(--ouro-3); color: var(--ouro-2); border-radius: 3px; } .tema-luxo #toast div.erro { background: #2A1512; border-color: #7C3A33; color: #F0B4AC; }
+.tema-luxo .login .cx { background: #100F0C; border: 1px solid var(--ouro-3); border-radius: 4px; box-shadow: 0 40px 90px -30px #000; padding: 34px 28px; }
+.tema-luxo .barra-h { background: #221F18; box-shadow: none; } .tema-luxo .barra-h i, .tema-luxo .barras div { background: linear-gradient(180deg, var(--ouro-2), var(--ouro-3)); box-shadow: none; }
+.tema-luxo .pilha { background: #221F18; box-shadow: none; border-radius: 2px; } .tema-luxo .pilha i { border-right-color: #0B0A08; }
+.tema-luxo .c1 { background: #C9A961; } .tema-luxo .c2 { background: #8C5A3C; } .tema-luxo .c3 { background: #EFE6D2; } .tema-luxo .c4 { background: #6B6455; } .tema-luxo .c5 { background: #4E7A4A; }
+
+/* Mesas, carta e conta */
+.tema-luxo .mesa { background: linear-gradient(180deg, #171511, #12100D); border: 1px solid var(--linha); border-radius: 4px; box-shadow: none; color: var(--castanho); }
+.tema-luxo .mesa b { font-family: var(--titulo); font-weight: 500; font-size: 18px; }
+.tema-luxo .mesa.res { background: #10141C; border-color: #3E5C94; box-shadow: none; } .tema-luxo .mesa.res .res-t { color: #9DB8EA; }
+.tema-luxo .mesa.oc.verde { background: #101A12; border-color: #4E7A4A; box-shadow: none; color: #DDEBDC; } .tema-luxo .mesa.oc.verde .mudo { color: #9CC79A; }
+.tema-luxo .mesa.oc.amarelo { background: #1F1A0C; border-color: var(--ouro); box-shadow: none; color: var(--ouro-2); } .tema-luxo .mesa.oc.amarelo .mudo, .tema-luxo .mesa.oc.amarelo b { color: var(--ouro-2); }
+.tema-luxo .mesa.oc.vermelho { background: #2A1210; border-color: #C24A3E; box-shadow: none; color: #F6D5D0; }
+.tema-luxo .art { background: #14120E; border: 1px solid var(--linha); border-radius: 3px; box-shadow: none; color: var(--castanho); } .tema-luxo .art b { font-family: var(--titulo); font-weight: 500; font-size: 16px; }
+.tema-luxo .art span { color: var(--ouro); font-weight: 500; } .tema-luxo .art:active { background: #1C1914; box-shadow: none; } .tema-luxo .art.tem { border-color: var(--ouro); box-shadow: none; } .tema-luxo .art i { background: var(--ouro); color: #14110A; }
+.tema-luxo .art.fora { background: repeating-linear-gradient(135deg, #14120E 0 10px, #1A1814 10px 20px); }
+.tema-luxo .lin { border-bottom: 1px solid #221F18; } .tema-luxo .qt button { border: 1px solid var(--ouro-3); color: var(--ouro-2); border-radius: 2px; }
+.tema-luxo .tot-l.g { border-top: 1px solid var(--ouro); font-weight: 500; color: var(--ouro-2); }
+.tema-luxo .barra-m { background: rgba(11, 10, 8, .96); border-top: 1px solid var(--ouro-3); }
+.tema-luxo .legenda .l0 { background: #EFE6D2; }
+.tema-luxo .disp button { background: #101A12; border-color: #2F4A2D; box-shadow: none; color: var(--castanho); } .tema-luxo .disp button b { color: #9CC79A; } .tema-luxo .disp button.fora { background: #2A1512; border-color: #7C3A33; } .tema-luxo .disp button.fora b { color: #E08A80; }
+
+/* Planta: chão escuro, toalhas brancas */
+.tema-luxo .planta { background: repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 90px), repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 90px), radial-gradient(circle at 50% 30%, #2A251C, #14120E 75%); border: 10px solid #0A0907; box-shadow: 0 0 0 1px var(--ouro-3), 0 18px 0 #050504, 0 70px 70px -10px #000; }
+.tema-luxo .planta.editar { box-shadow: 0 0 0 1px var(--ouro-3); }
+.tema-luxo .pm .esp1 { background: #C9BFA8; } .tema-luxo .pm .esp2 { background: #E6DCC6; } .tema-luxo .pm .pe { background: #050504; }
+.tema-luxo .pm .tampo { background: linear-gradient(135deg, #FFFFFF, #EDE4D0); box-shadow: inset 0 0 0 1px var(--ouro), 0 0 18px rgba(255, 255, 255, .12); }
+.tema-luxo .pm > i.cad { background: #3A3122; box-shadow: 0 0 0 1px var(--ouro-3); }
+.tema-luxo .pm .tag { background: #0B0A08; border: 1px solid var(--ouro-3); color: var(--castanho); border-radius: 2px; } .tema-luxo .pm .tag b { font-family: var(--titulo); font-weight: 500; color: var(--ouro-2); }
+.tema-luxo .pm.oc .tag { background: #0B0A08; color: var(--castanho); }
+.tema-luxo .pm.oc.amarelo .tag { background: #1F1A0C; color: var(--ouro-2); border-color: var(--ouro); } .tema-luxo .pm.oc.vermelho .tag { background: #8E130D; color: #fff; border-color: #C24A3E; } .tema-luxo .pm.res .tag { background: #10141C; border-color: #3E5C94; color: #C9D8F5; }
+.tema-luxo .pm > i.junta { background: rgba(140, 115, 53, .8); box-shadow: none; }
+
+/* Cozinha, administração */
+.tema-luxo .tic { background: #12100D; border: 1px solid var(--linha); border-radius: 4px; box-shadow: none; } .tema-luxo .tic header { background: #0B0A08; color: var(--ouro-2); border-bottom: 1px solid var(--ouro-3); font-family: var(--caps); letter-spacing: .1em; text-transform: uppercase; font-weight: 500; }
+.tema-luxo .tic button { color: var(--castanho); border-bottom: 1px solid #221F18; } .tema-luxo .tic button.preparar { background: #1F1A0C; } .tema-luxo .tic button.pronto { background: #101A12; } .tema-luxo .tic button small { color: var(--castanho-2); }
+.tema-luxo .tic.aviso { border-color: var(--ouro); } .tema-luxo .tic.aviso header { background: #1F1A0C; } .tema-luxo .tic.tarde { border-color: #C24A3E; } .tema-luxo .tic.tarde header { background: #8E130D; color: #fff; } .tema-luxo .tic.pr { border-color: #4E7A4A; box-shadow: none; } .tema-luxo .tic.pr header { background: #101A12; color: #9CC79A; }
+.tema-luxo .tic-b { background: #0F0E0B; } .tema-luxo .kds-p { background: #0F0E0B; border: 1px solid var(--linha); box-shadow: none; border-radius: 4px; }
+.tema-luxo .adm-l { border-top: 2px solid var(--linha); } .tema-luxo .adm-l.verde { border-top-color: #4E7A4A; } .tema-luxo .adm-l.amarelo { border-top-color: var(--ouro); } .tema-luxo .adm-l.vermelho { border-top-color: #C24A3E; }
+.tema-luxo .adm-big b { font-weight: 500; color: var(--ouro-2); text-shadow: none; font-size: 34px; }
+.tema-luxo .adm-s { background: #0F0E0B; border: 1px solid #221F18; border-radius: 3px; } .tema-luxo .adm-s.amarelo { background: #1F1A0C; border-color: var(--ouro); } .tema-luxo .adm-s.vermelho { background: #2A1210; border-color: #C24A3E; } .tema-luxo .adm-s span { color: var(--castanho-2); }
+.tema-luxo .adm-p span { background: #1A1814; color: #CFC3A8; border-radius: 2px; } .tema-luxo .adm-p span.al { background: #1F1A0C; color: var(--ouro-2); font-weight: 500; }
+.tema-luxo .at { background: #1A160C; border-left: 2px solid var(--ouro); border-radius: 2px; } .tema-luxo .at.mau { background: #221210; border-left-color: #C24A3E; } .tema-luxo .at span { color: var(--castanho-2); } .tema-luxo .at a { color: var(--ouro-2); }
+.tema-luxo .alerta { border-left: 2px solid #4E7A4A; } .tema-luxo .alerta.mau { border-left-color: #C24A3E; } .tema-luxo .alerta.aviso2 { border-left-color: var(--ouro); }
+.tema-luxo .vivo { color: var(--castanho-2); } .tema-luxo .qr img { border: 1px solid var(--ouro-3); border-radius: 2px; }
+.tema-luxo .lado .marca img { content: url('/logo.png'); width: 62px; height: auto; border: 0; border-radius: 0; padding: 0; }
+.tema-luxo .lado .marca span { display: none; } .tema-luxo .lado .marca { justify-content: center; padding: 22px 16px 14px; }
+.tema-luxo .lado .marca img { width: 128px; }

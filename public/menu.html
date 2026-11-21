@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#4A1A0C">
 <title>Menu — Mesa de Imbondeiro</title>
 <link rel="icon" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap">
 <style>
   body { margin: 0; background: #FAF3E8; color: #4A1A0C; font: 16px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
   .w { max-width: 620px; margin: 0 auto; padding: 20px 18px 60px; }
@@ -40,10 +43,38 @@
   .cartas { display: flex; background: #EBDCC3; border-radius: 12px; padding: 4px; margin: 12px 0 2px; }
   .cartas button { flex: 1; border: 0; background: none; padding: 10px 8px; border-radius: 9px; font: 700 15px system-ui, sans-serif; color: #6B3A26; }
   .cartas button.on { background: #4A1A0C; color: #FAF3E8; }
+  /* Tema «Luxo»: preto, dourado e marfim */
+  body.luxo { background: radial-gradient(900px 480px at 50% -10%, #1D1910 0%, #0B0A08 60%) fixed #0B0A08; color: #EFE6D2; font-family: 'Playfair Display', Georgia, serif; }
+  .luxo .w { max-width: 640px; padding-top: 34px; }
+  .luxo header img { width: 190px; filter: brightness(0) invert(1) sepia(1) saturate(2.2) hue-rotate(2deg) brightness(.86); }
+  .luxo header p { color: #A99C82; font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: .22em; text-transform: uppercase; margin-top: 14px; }
+  .luxo header::after { content: ''; display: block; width: 70px; height: 1px; margin: 18px auto 0; background: linear-gradient(90deg, transparent, #C9A961, transparent); }
+  .luxo nav { background: rgba(11, 10, 8, .94); border-bottom: 1px solid #2E2A20; justify-content: flex-start; gap: 4px; }
+  .luxo nav a { border: 0; border-radius: 0; color: #CFC3A8; font: 500 11.5px 'Cinzel', serif; letter-spacing: .16em; text-transform: uppercase; padding: 8px 12px; }
+  .luxo nav a:hover { color: #E7D3A1; }
+  .luxo h2 { font-family: 'Cinzel', serif; font-weight: 500; font-size: 15px; letter-spacing: .28em; text-transform: uppercase; color: #C9A961; text-align: center; margin: 44px 0 14px; }
+  .luxo h2::after { content: ''; display: block; width: 34px; height: 1px; background: #8C7335; margin: 12px auto 0; }
+  .luxo .a { border-bottom: 1px solid #1F1C15; padding: 16px 0; align-items: baseline; }
+  .luxo .a b { font-weight: 500; font-size: 19px; color: #F6EEDC; } .luxo .a small { color: #A99C82; font-style: italic; font-size: 14.5px; display: block; margin-top: 3px; }
+  .luxo .a span { color: #E7D3A1; font-weight: 400; font-size: 16px; letter-spacing: .03em; }
+  .luxo .cartas { background: none; border: 1px solid #2E2A20; border-radius: 2px; padding: 3px; margin-top: 22px; } .luxo .cartas button { color: #A99C82; font: 500 11.5px 'Cinzel', serif; letter-spacing: .16em; text-transform: uppercase; border-radius: 1px; } .luxo .cartas button.on { background: #C9A961; color: #14110A; }
+  .luxo .bres { background: transparent; border: 1px solid #C9A961; color: #E7D3A1; border-radius: 2px; box-shadow: none; font: 500 12px 'Cinzel', serif; letter-spacing: .2em; text-transform: uppercase; padding: 13px 26px; }
+  .luxo #fRes, .luxo #reg, .luxo #segue .cx { background: #12100D; border: 1px solid #8C7335; border-radius: 3px; }
+  .luxo #fRes label, .luxo #reg label { color: #A99C82; font: 500 10.5px 'Cinzel', serif; letter-spacing: .14em; text-transform: uppercase; }
+  .luxo #fRes input, .luxo #reg input { background: #0B0A08; border: 1px solid #2E2A20; color: #EFE6D2; border-radius: 2px; color-scheme: dark; }
+  .luxo #fRes .bres, .luxo #reg .bres, .luxo #cesto button { background: linear-gradient(180deg, #E2CB90, #B8963F); border-color: #B8963F; color: #14110A; }
+  .luxo #regNao, .luxo #fRes p, .luxo #aviso18 { color: #A99C82 !important; }
+  .luxo .q button { background: transparent; border: 1px solid #C9A961; color: #E7D3A1; box-shadow: none; width: 36px; height: 36px; font-weight: 400; } .luxo .q button[data-m] { background: transparent; color: #A99C82; border-color: #4A4334; box-shadow: none; }
+  .luxo .ok { background: #101A12; border-left: 2px solid #4E7A4A; border-radius: 2px; } .luxo .ok.erro { background: #2A1512; border-color: #C24A3E; }
+  .luxo #segue .ln { border-bottom: 1px solid #1F1C15; } .luxo .es { background: transparent; border: 1px solid #4A4334; color: #CFC3A8; border-radius: 2px; font-weight: 500; font-family: system-ui, sans-serif; }
+  .luxo .es.enviado { border-color: #C9A961; color: #E7D3A1; background: transparent; } .luxo .es.preparar { border-color: #C24A3E; color: #F0B4AC; background: transparent; } .luxo .es.pronto, .luxo .es.entregue { border-color: #4E7A4A; color: #9CC79A; background: transparent; }
+  .luxo #cesto { background: #0B0A08; border-top: 1px solid #8C7335; font-family: system-ui, sans-serif; font-weight: 500; }
+  .luxo footer { color: #6B6455; font: 11px 'Cinzel', serif; letter-spacing: .14em; text-transform: uppercase; margin-top: 50px; }
   footer { text-align: center; color: #6B3A26; font-size: 13px; margin-top: 30px; }
 </style>
 </head>
 <body>
+<script>try { if (localStorage.getItem('mdi.tema') === 'luxo') document.body.classList.add('luxo'); } catch (e) {}</script>
 <div class="w">
   <header><img src="/logo.png" alt="Mesa de Imbondeiro"><p id="local"></p></header>
   <div id="cartas"></div>
@@ -148,7 +179,7 @@ fRes.onsubmit = async (e) => {
 };
 fetch('/api/menu?l=' + encodeURIComponent(l) + (mesaId ? '&m=' + encodeURIComponent(mesaId) : '')).then((r) => r.json()).then((m) => {
   if (m.erro) throw new Error(m.erro);
-  M = m;
+  M = m; document.body.classList.toggle('luxo', m.tema === 'luxo'); try { localStorage.setItem('mdi.tema', m.tema || ''); } catch (e) {}
   el('local').textContent = m.local + (m.mesa ? ' · ' + m.mesa.nome : '') + (m.morada ? ' · ' + m.morada : '');
   if (m.mesa) el('msg').innerHTML = '<div class="ok">Pode pedir a partir daqui: toque em + nos artigos e envie o pedido.</div>';
   desenha(); segue();
