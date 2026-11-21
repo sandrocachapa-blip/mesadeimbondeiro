@@ -300,14 +300,22 @@ function consulta(p) {
   window.print();
 }
 
+function apito() { try { const C = window.AudioContext || window.webkitAudioContext, c = apito.c || (apito.c = new C()); [0, 0.22].forEach((t) => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 880; o.connect(g); g.connect(c.destination); g.gain.setValueAtTime(0.25, c.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + t + 0.18); o.start(c.currentTime + t); o.stop(c.currentTime + t + 0.2); }); } catch (e) {} }
 function vKds(sec) {
-  const act = ['enviado', 'preparar', 'pronto'];
-  const tics = S.st.pedidos.map((p) => ({ p, ls: p.linhas.filter((l) => l.seccao === sec && act.includes(l.estado)) })).filter((t) => t.ls.length)
+  const de = (ests) => S.st.pedidos.map((p) => ({ p, ls: p.linhas.filter((l) => l.seccao === sec && ests.includes(l.estado)) })).filter((t) => t.ls.length)
     .sort((a, b) => new Date(a.ls[0].enviado_em || a.ls[0].criado_em) - new Date(b.ls[0].enviado_em || b.ls[0].criado_em));
-  return `<div class="cab"><h1>${sec === 'bar' ? 'Bar' : 'Cozinha'}</h1><span class="mudo">Toque numa linha para avançar: enviado → a preparar → pronto → entregue</span></div>
-    ${tics.length ? `<div class="kds">${tics.map(({ p, ls: l }) => { const m = mins(l[0].enviado_em || l[0].criado_em);
-      return `<div class="tic ${m >= 15 ? 'tarde' : ''}"><header><span>${esc(p.mesa_nome)}</span><span>${m} min</span></header>${l.map((x) => `<button class="${x.estado}" data-a="kds" data-id="${x.id}" data-e="${x.estado}"><b>${x.qtd}×</b><span style="flex:1">${esc(x.nome)}${x.notas ? `<br><small><i>${esc(x.notas)}</i></small>` : ''}</span><span class="est ${x.estado}">${ESTADOS[x.estado]}</span></button>`).join('')}</div>`; }).join('')}</div>`
-      : '<div class="cartao">Sem pedidos em espera.</div>'}`;
+  const fila = de(['enviado', 'preparar']), prontos = de(['pronto']);
+  // apito quando entra um pedido novo
+  const ids = fila.flatMap((t) => t.ls.filter((l) => l.estado === 'enviado').map((l) => l.id)), vistos = (S.x.kdsV = S.x.kdsV || {})[sec];
+  if (vistos && ids.some((id) => !vistos.includes(id))) apito();
+  S.x.kdsV[sec] = ids;
+  const linha = (x) => `<button class="${x.estado}" data-a="kds" data-id="${x.id}" data-e="${x.estado}"><b>${x.qtd}×</b><span style="flex:1">${esc(x.nome)}${x.notas ? `<br><small><i>${esc(x.notas)}</i></small>` : ''}${x.criado_por_nome === 'Cliente (QR)' ? '<br><small>pedido pelo cliente</small>' : ''}</span><span class="est ${x.estado}">${ESTADOS[x.estado]}</span></button>`;
+  const tic = ({ p, ls }) => { const m = mins(ls[0].enviado_em || ls[0].criado_em), novos = ls.some((x) => x.estado === 'enviado');
+    return `<div class="tic ${m >= 30 ? 'tarde pisca' : m >= 10 ? 'aviso' : ''}"><header><span>${esc(p.mesa_nome)}</span><span>${m} min · ${esc((p.aberto_por_nome || '').split(' ')[0])}</span></header>${ls.map(linha).join('')}
+      <div class="tic-b">${novos ? `<button class="btn" data-a="kdsTodos" data-p="${p.id}" data-s="${sec}" data-de="enviado" data-para="preparar">Aceitar pedido</button>` : ''}<button class="btn p" data-a="kdsTodos" data-p="${p.id}" data-s="${sec}" data-de="enviado,preparar" data-para="pronto">Validar saída</button></div></div>`; };
+  return `<div class="cab"><h1>${sec === 'bar' ? 'Bar' : 'Cozinha'}</h1><span class="mudo">${fila.length} pedido(s) em fila · ${fila.reduce((s, t) => s + t.ls.reduce((a, l) => a + l.qtd, 0), 0)} artigo(s)</span><span class="esp"></span><button class="btn" data-a="kdsFull">${document.body.classList.contains('kds-full') ? 'Sair do ecrã inteiro' : 'Ecrã inteiro'}</button></div>
+    <div class="kds-2"><div><h3 class="zona" style="margin-top:0">Por preparar</h3>${fila.length ? `<div class="kds">${fila.map(tic).join('')}</div>` : '<div class="cartao">Sem pedidos em espera.</div>'}</div>
+    <div class="kds-p"><h3 class="zona" style="margin-top:0">Saída validada · a aguardar entrega</h3>${prontos.length ? prontos.map(({ p, ls }) => `<div class="tic pr"><header><span>${esc(p.mesa_nome)}</span><span>pronto</span></header>${ls.map((x) => `<button class="pronto" data-a="kds" data-id="${x.id}" data-e="pronto"><b>${x.qtd}×</b><span style="flex:1">${esc(x.nome)}</span></button>`).join('')}<div class="tic-b"><button class="btn" data-a="kdsTodos" data-p="${p.id}" data-s="${sec}" data-de="pronto" data-para="entregue">Entregue na mesa</button></div></div>`).join('') : '<p class="mudo">Nada a aguardar entrega.</p>'}</div></div>`;
 }
 
 /* Ecrãs que precisam do servidor: carregam e voltam a desenhar */
@@ -473,6 +481,8 @@ const ACOES = {
     if (op('pagamento.add', { id: uuid(), pedido_id: p.id, meio: el.dataset.m, valor: Math.min(v, falta) })) mReceber(p.id); render(); },
   rmPag: (el) => { S.x.rec.troco = 0; op('pagamento.remover', { id: el.dataset.id }); mReceber(el.dataset.p); render(); },
   fecharConta: (el) => { if (op('pedido.fechar', { pedido_id: el.dataset.id, cliente_nome: $('#recNome').value.trim(), cliente_nif: $('#recNif').value.trim() })) { fechar(); toast('Conta fechada'); delete S.x.fact; delete S.x.caixa; ir('mesas'); } },
+  kdsTodos: (el) => { const p = P(el.dataset.p); if (!p) return; const de = el.dataset.de.split(','); p.linhas.filter((l) => l.seccao === el.dataset.s && de.includes(l.estado)).forEach((l) => op('linha.estado', { id: l.id, estado: el.dataset.para })); if (el.dataset.para === 'pronto') toast('Saída validada: ' + p.mesa_nome); render(); },
+  kdsFull: () => { const on = document.body.classList.toggle('kds-full'); try { if (on) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {} apito(); render(); },
   kds: (el) => { const seg = { enviado: 'preparar', preparar: 'pronto', pronto: 'entregue' }[el.dataset.e]; if (seg) { op('linha.estado', { id: el.dataset.id, estado: seg }); render(); } },
   abrirCaixa: () => form('Abrir caixa', [{ k: 'fundo', label: 'Fundo de caixa em numerário (Kz)', type: 'number', value: 0 }], (v) => { op('turno.abrir', { id: uuid(), local_id: S.local, fundo: Number(v.fundo) || 0 }); setTimeout(() => recarregar('caixa'), 900); }),
   mov: (el) => form(el.dataset.t === 'sangria' ? 'Sangria (retirar numerário)' : 'Reforço (juntar numerário)', [{ k: 'valor', label: 'Valor (Kz)', type: 'number', req: 1 }, { k: 'motivo', label: 'Motivo' }], (v) => { op('caixa.mov', { id: uuid(), turno_id: S.x.turnoId, tipo: el.dataset.t, valor: Number(v.valor) || 0, motivo: v.motivo }); setTimeout(() => recarregar('caixa'), 900); }),
@@ -508,7 +518,7 @@ document.addEventListener('submit', async (e) => {
   } catch (er) { toast(er.message, 'erro'); }
 });
 document.addEventListener('change', (e) => { if (e.target.id === 'selLocal') { if (S.queue.length) { toast('Aguarde a sincronização antes de mudar de local', 'erro'); e.target.value = S.local; return; } S.local = e.target.value; S.x = {}; S.st = null; guardar(); render(); sync(); } });
-window.addEventListener('hashchange', () => { fechar(); document.body.classList.remove('menu-on'); Object.keys(S.x).forEach((k) => { if (S.x[k] && typeof S.x[k] === 'object' && 'pronto' in S.x[k]) delete S.x[k]; }); render(); });
+window.addEventListener('hashchange', () => { if (!['cozinha', 'bar'].includes(rota().v)) document.body.classList.remove('kds-full'); fechar(); document.body.classList.remove('menu-on'); Object.keys(S.x).forEach((k) => { if (S.x[k] && typeof S.x[k] === 'object' && 'pronto' in S.x[k]) delete S.x[k]; }); render(); });
 document.addEventListener('input', (e) => { if (e.target.id === 'busca') { S.x.busca = e.target.value; const p = P(rota().id); if (p) $('#arts').innerHTML = artsHtml(p); } });
 /* Arrastar mesas na planta (modo de edição) */
 let arr = null;

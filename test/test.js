@@ -237,3 +237,31 @@ global.__t1 = (async () => {
   assert.equal((await raw('GET', 'state')).json.reservas.length, 0);
   console.log('OK — reservas');
 })().catch((e) => { console.error(e); process.exit(1); });
+// ---- Pedido do cliente com registo e acompanhamento ----
+(async () => {
+  await global.__t1; await new Promise((r) => setTimeout(r, 17000));
+  const { PGlite } = require('@electric-sql/pglite');
+  const core = require('../lib/core'); core._reset();
+  const pg = new PGlite();
+  const db = { q: async (t, p) => (await pg.query(t, p)).rows, tx: (fn) => pg.transaction((tx) => fn(async (t, p) => (await tx.query(t, p)).rows)) };
+  const env = { AUTH_SECRET: 's', ADMIN_PASSWORD: 'segredo1' };
+  let token = '';
+  const raw = (method, path, body, query) => core.handle(db, env, { method, path: '/api/' + path, body, query: query || {}, token });
+  token = (await raw('POST', 'login', { login: 'admin', password: 'segredo1' })).json.token;
+  let st = (await raw('GET', 'state')).json; const mesa = st.mesas[0].id, a = st.artigos.find((x) => x.nome === 'Mufete').id; token = '';
+  const r1 = (await raw('POST', 'pedido-publico', { l: 'principal', mesa, itens: [{ artigo_id: a, qtd: 1 }], cliente: { nome: 'Rui', telefone: '923 555 777' } })).json;
+  assert.ok(/^[0-9a-f-]{36}$/.test(r1.seguir));
+  const r2 = (await raw('POST', 'pedido-publico', { l: 'principal', mesa, itens: [{ artigo_id: a, qtd: 2 }], cliente: { nome: 'Rui', telefone: '923 555 777' }, seguir: r1.seguir })).json;
+  assert.equal(r2.seguir, r1.seguir);
+  assert.equal((await raw('POST', 'pedido-publico', { l: 'principal', mesa, itens: [{ artigo_id: a, qtd: 1 }] })).json.seguir, null);
+  let e = (await raw('GET', 'pedido-estado', null, { t: r1.seguir })).json; assert.equal(e.linhas.length, 2); assert.ok(e.linhas.every((x) => x.estado === 'novo'));
+  assert.equal((await raw('GET', 'pedido-estado', null, { t: 'x' })).status, 400);
+  assert.equal((await raw('GET', 'pedido-estado', null, { t: '00000000-0000-0000-0000-000000000000' })).json.linhas.length, 0);
+  token = (await raw('POST', 'login', { login: 'admin', password: 'segredo1' })).json.token;
+  st = (await raw('GET', 'state')).json; const p = st.pedidos[0];
+  const ops = (l) => raw('POST', 'ops', { ops: l.map((o) => ({ id: 'o' + Math.random(), ts: new Date().toISOString(), ...o })) });
+  await ops([{ tipo: 'pedido.enviar', d: { pedido_id: p.id } }, { tipo: 'linha.estado', d: { id: e.linhas[0].id, estado: 'pronto' } }]);
+  e = (await raw('GET', 'pedido-estado', null, { t: r1.seguir })).json; assert.deepEqual(e.linhas.map((x) => x.estado).sort(), ['enviado', 'pronto']);
+  assert.equal((await raw('GET', 'reg', null, { e: 'clientes' })).json.filter((c) => c.telefone === '923 555 777').length, 1);
+  console.log('OK — pedido do cliente com registo');
+})().catch((e) => { console.error(e); process.exit(1); });

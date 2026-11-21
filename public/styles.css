@@ -309,3 +309,18 @@ h1 { font-size: 26px; text-shadow: 0 1px 0 #fff; }
 .pm > i.junta { inset: 5px auto 5px auto; width: 4px; margin-left: -2px; border-radius: 2px; background: rgba(74, 26, 12, .55); box-shadow: 1px 0 0 rgba(255,255,255,.55), -1px 0 0 rgba(255,255,255,.35); transform: translateZ(31px); pointer-events: none; }
 .pm.oc > i.junta, .pm.res > i.junta { background: rgba(0, 0, 0, .45); }
 .pm:hover > i.junta { transform: translateZ(41px); }
+
+/* ================= Versão 8: ecrã da cozinha com validação de saída ================= */
+.kds-2 { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .kds-2 { grid-template-columns: 1fr; } }
+.kds-p { background: #F3EBDD; border-radius: 16px; padding: 12px; box-shadow: inset 0 2px 6px rgba(74,26,12,.15); }
+.kds-p .tic { margin-bottom: 10px; }
+.tic-b { display: flex; gap: 8px; padding: 10px; background: #FBF1E1; } .tic-b .btn { flex: 1; min-height: 50px; font-size: 15px; }
+.tic.aviso header { background: #C28E0A; } .tic.aviso { border-color: #C28E0A; }
+.tic.tarde { border-color: #C8221A; } .tic.tarde header { background: #C8221A; } .tic.pisca { animation: piscaL .8s infinite alternate; }
+.tic.pr { border-color: #2A6B31; box-shadow: 0 4px 0 #1F5226; } .tic.pr header { background: #2A6B31; }
+.tic button small { color: var(--castanho-2); }
+body.kds-full .lado, body.kds-full .topo, body.kds-full .vela { display: none !important; }
+body.kds-full .corpo { margin-left: 0; } body.kds-full main { max-width: none; padding: 18px 22px; }
+body.kds-full .tic button { font-size: 19px; padding: 14px; } body.kds-full .tic header { font-size: 19px; padding: 12px 14px; }
+body.kds-full .kds { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }

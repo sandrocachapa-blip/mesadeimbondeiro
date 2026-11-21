@@ -29,6 +29,14 @@
   #fRes label { display: block; font-size: 13px; font-weight: 600; color: #6B3A26; margin-top: 10px; }
   #fRes input { display: block; width: 100%; box-sizing: border-box; font: 16px system-ui, sans-serif; padding: 10px 12px; border: 1.5px solid #E2CFB2; border-radius: 10px; margin-top: 4px; background: #fff; color: #4A1A0C; }
   .dois { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #reg { background: #FFFDF9; border: 2px solid #B03F1B; border-radius: 14px; padding: 12px 16px; margin: 12px 0; }
+  #reg label { display: block; font-size: 13px; font-weight: 600; color: #6B3A26; margin-top: 10px; }
+  #reg input { display: block; width: 100%; box-sizing: border-box; font: 16px system-ui, sans-serif; padding: 10px 12px; border: 1.5px solid #E2CFB2; border-radius: 10px; margin-top: 4px; }
+  #segue .cx { background: #FFFDF9; border: 1.5px solid #E2CFB2; border-radius: 14px; padding: 10px 14px; margin: 12px 0; }
+  #segue .ln { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px dashed #E2CFB2; } #segue .ln:last-child { border: 0; } #segue .ln span:first-child { flex: 1; }
+  .es { font-size: 12px; font-weight: 700; border-radius: 99px; padding: 3px 9px; background: #F1E4CF; white-space: nowrap; }
+  .es.enviado { background: #F2C230; } .es.preparar { background: #B03F1B; color: #fff; } .es.pronto, .es.entregue { background: #3F9A4B; color: #fff; } .es.anulado { text-decoration: line-through; }
+  #alerta { position: fixed; left: 12px; right: 12px; top: 12px; z-index: 9; background: #2A6B31; color: #fff; border-radius: 14px; padding: 14px 16px; font-weight: 700; box-shadow: 0 12px 30px rgba(0,0,0,.35); display: none; }
   footer { text-align: center; color: #6B3A26; font-size: 13px; margin-top: 30px; }
 </style>
 </head>
@@ -48,15 +56,56 @@
     <p style="font-size:13px;color:#6B3A26;text-align:center">A reserva só fica garantida depois de o restaurante a confirmar.</p>
   </form>
   <div id="msg"></div>
+  <div id="segue"></div>
+  <div id="reg" style="display:none">
+    <h2 style="margin-top:4px">Quer ser avisado?</h2>
+    <p style="margin:4px 0 0;font-size:14px">Registe-se e este ecrã avisa-o quando a cozinha aceitar o pedido e quando estiver pronto. Mantenha esta página aberta.</p>
+    <label>Nome<input id="regNome" maxlength="80" autocomplete="name"></label>
+    <label>Telefone (opcional)<input id="regTel" type="tel" maxlength="30" autocomplete="tel"></label>
+    <button class="bres" id="regSim" style="width:100%;margin-top:12px">Registar e enviar pedido</button>
+    <button id="regNao" style="width:100%;margin-top:8px;background:none;border:0;color:#6B3A26;font:inherit;text-decoration:underline;padding:8px">Enviar sem registo</button>
+  </div>
   <div id="menu"><p style="text-align:center">A carregar o menu…</p></div>
   <footer>Preços em kwanzas, com impostos incluídos.</footer>
 </div>
+<div id="alerta"></div>
 <div id="cesto"><span id="cestoTxt"></span><button id="enviar">Enviar pedido</button></div>
 <script>
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kz = (n) => new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 0 }).format(Math.round(n || 0)).replace(/\s/g, ' ') + ' Kz';
 const qs = new URLSearchParams(location.search), l = qs.get('l') || 'principal', mesaId = qs.get('m') || '';
 let M = null; const cesto = {};
+/* Registo do cliente e acompanhamento do pedido (guardado neste telemóvel durante 8 horas) */
+const CH = 'mdi.cli.' + mesaId;
+let CLI = null; try { CLI = JSON.parse(localStorage.getItem(CH) || 'null'); if (CLI && Date.now() - CLI.t > 8 * 3600e3) CLI = null; } catch (e) {}
+const guardaCli = () => { try { localStorage.setItem(CH, JSON.stringify(CLI)); } catch (e) {} };
+const TXT = { novo: 'à espera do empregado', enviado: 'enviado para a cozinha', preparar: 'em preparação', pronto: 'pronto, a caminho', entregue: 'entregue', anulado: 'anulado' };
+let ultimo = {};
+function apito() { try { const C = window.AudioContext || window.webkitAudioContext, c = apito.c || (apito.c = new C()); [0, 0.25, 0.5].forEach((t) => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 988; o.connect(g); g.connect(c.destination); g.gain.setValueAtTime(0.3, c.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + t + 0.2); o.start(c.currentTime + t); o.stop(c.currentTime + t + 0.22); }); } catch (e) {} }
+function avisa(txt) { const a = el('alerta'); a.textContent = txt; a.style.display = 'block'; clearTimeout(avisa.t); avisa.t = setTimeout(() => { a.style.display = 'none'; }, 12000); apito(); try { navigator.vibrate && navigator.vibrate([300, 150, 300]); } catch (e) {}
+  try { if (window.Notification && Notification.permission === 'granted') new Notification('Mesa de Imbondeiro', { body: txt }); } catch (e) {} }
+async function segue() {
+  if (!CLI || !CLI.seguir) return;
+  try { const r = await fetch('/api/pedido-estado?t=' + CLI.seguir), j = await r.json(); if (!r.ok) return;
+    const novoPronto = j.linhas.filter((x) => x.estado === 'pronto' && ultimo[x.id] && ultimo[x.id] !== 'pronto'), aceite = j.linhas.filter((x) => x.estado === 'preparar' && ultimo[x.id] && ultimo[x.id] !== 'preparar');
+    if (novoPronto.length) avisa('O seu pedido está pronto e vai a caminho da mesa: ' + novoPronto.map((x) => x.qtd + '× ' + x.nome).join(', '));
+    else if (aceite.length) avisa('A cozinha aceitou o seu pedido e já o está a preparar.');
+    ultimo = Object.fromEntries(j.linhas.map((x) => [x.id, x.estado]));
+    el('segue').innerHTML = j.linhas.length ? '<div class="cx"><b>' + esc(CLI.nome) + ', o seu pedido</b>' + j.linhas.map((x) => `<div class="ln"><span>${x.qtd}× ${esc(x.nome)}</span><span class="es ${x.estado}">${TXT[x.estado] || x.estado}</span></div>`).join('') + '</div>' : '';
+  } catch (e) {}
+}
+setInterval(segue, 8000);
+async function envia(bt) {
+  bt.disabled = true;
+  try {
+    const r = await fetch('/api/pedido-publico', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ l, mesa: mesaId, cliente: CLI && CLI.nome ? { nome: CLI.nome, telefone: CLI.telefone } : null, seguir: CLI && CLI.seguir, itens: Object.entries(cesto).map(([artigo_id, qtd]) => ({ artigo_id, qtd })) }) });
+    const j = await r.json(); if (!r.ok) throw new Error(j.erro || 'Não foi possível enviar');
+    Object.keys(cesto).forEach((k) => delete cesto[k]); desenha();
+    if (CLI && j.seguir) { CLI.seguir = j.seguir; guardaCli(); segue(); }
+    el('msg').innerHTML = '<div class="ok"><b>Pedido recebido.</b><br>O empregado vai confirmá-lo consigo antes de seguir para a cozinha.' + (CLI && CLI.nome ? ' Avisamos neste ecrã quando estiver pronto.' : '') + '</div>'; window.scrollTo(0, 0);
+  } catch (er) { el('msg').innerHTML = '<div class="ok erro">' + esc(er.message) + '</div>'; window.scrollTo(0, 0); }
+  bt.disabled = false;
+}
 const el = (id) => document.getElementById(id);
 function desenha() {
   el('menu').innerHTML = M.familias.map((f, i) => `<h2 id="f${i}">${esc(f.nome)}</h2>` + f.artigos.map((a) => `<div class="a"><div><b>${esc(a.nome)}</b><small>${esc(a.descricao)}</small></div><span>${kz(a.preco)}</span>${M.mesa ? `<div class="q">${cesto[a.id] ? `<button data-m="${a.id}">−</button><b>${cesto[a.id]}</b>` : ''}<button data-p="${a.id}">+</button></div>` : ''}</div>`).join('')).join('');
@@ -67,16 +116,10 @@ document.addEventListener('click', async (e) => {
   const p = e.target.dataset.p, m = e.target.dataset.m;
   if (p) { cesto[p] = Math.min(20, (cesto[p] || 0) + 1); desenha(); }
   if (m) { cesto[m] = (cesto[m] || 0) - 1; if (cesto[m] <= 0) delete cesto[m]; desenha(); }
-  if (e.target.id === 'enviar') {
-    e.target.disabled = true;
-    try {
-      const r = await fetch('/api/pedido-publico', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ l, mesa: mesaId, itens: Object.entries(cesto).map(([artigo_id, qtd]) => ({ artigo_id, qtd })) }) });
-      const j = await r.json(); if (!r.ok) throw new Error(j.erro || 'Não foi possível enviar');
-      Object.keys(cesto).forEach((k) => delete cesto[k]); desenha();
-      el('msg').innerHTML = '<div class="ok"><b>Pedido recebido.</b><br>O empregado vai confirmá-lo consigo antes de seguir para a cozinha.</div>'; window.scrollTo(0, 0);
-    } catch (er) { el('msg').innerHTML = '<div class="ok erro">' + esc(er.message) + '</div>'; window.scrollTo(0, 0); }
-    e.target.disabled = false;
-  }
+  if (e.target.id === 'enviar') { if (CLI) return envia(e.target); el('reg').style.display = 'block'; el('reg').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  if (e.target.id === 'regSim') { const n = el('regNome').value.trim(); if (!n) { el('regNome').focus(); return; }
+    CLI = { nome: n, telefone: el('regTel').value.trim(), t: Date.now() }; guardaCli(); el('reg').style.display = 'none'; apito.c || apito(); try { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); } catch (er) {} envia(el('enviar')); }
+  if (e.target.id === 'regNao') { CLI = { t: Date.now() }; guardaCli(); el('reg').style.display = 'none'; envia(el('enviar')); }
 });
 const fRes = el('fRes'), hojeL = new Date(Date.now() + 3600e3).toISOString().slice(0, 10);
 fRes.dia.min = hojeL; fRes.dia.value = hojeL;
@@ -97,7 +140,7 @@ fetch('/api/menu?l=' + encodeURIComponent(l) + (mesaId ? '&m=' + encodeURICompon
   el('local').textContent = m.local + (m.mesa ? ' · ' + m.mesa.nome : '') + (m.morada ? ' · ' + m.morada : '');
   el('nav').innerHTML = m.familias.map((f, i) => `<a href="#f${i}">${esc(f.nome)}</a>`).join('');
   if (m.mesa) el('msg').innerHTML = '<div class="ok">Pode pedir a partir daqui: toque em + nos artigos e envie o pedido.</div>';
-  desenha();
+  desenha(); segue();
 }).catch((e) => { el('menu').innerHTML = '<p style="text-align:center">Não foi possível carregar o menu. ' + esc(e.message) + '</p>'; });
 </script>
 
