@@ -193,9 +193,21 @@ function render() {
 }
 
 /* ---------- Ecrãs ---------- */
+const iniciais = (n) => String(n || '?').replace(/\(.*?\)/g, '').trim().split(/\s+/).slice(0, 2).map((x) => x[0] || '').join('').toUpperCase() || '?';
+function listaUsers() {
+  const d = ls.get('ulista', null), f = (S.x.uFil || '').trim().toLowerCase();
+  if (!d) return '<p class="mudo ul-v">A carregar utilizadores…</p>';
+  if (!d.lista) return '';
+  const us = d.utilizadores.filter((u) => !f || u.nome.toLowerCase().includes(f) || u.login.includes(f));
+  return us.length ? us.map((u) => `<button type="button" class="ul-u" data-a="escolherUser" data-l="${esc(u.login)}" data-n="${esc(u.nome)}"><i class="pf-${esc(u.perfil)}">${esc(iniciais(u.nome))}</i><span><b>${esc(u.nome)}</b><small>${esc(PERFIS[u.perfil] || u.perfil)}${u.local ? ' · ' + esc(u.local) : ''}</small></span></button>`).join('') : '<p class="mudo ul-v">Nenhum utilizador com esse nome.</p>';
+}
+function carregaUsers() { api('login-lista').then((r) => { ls.set('ulista', r); const el = $('#uLista'); if (el && el.classList.contains('on')) el.innerHTML = listaUsers(); }).catch(() => {}); }
 function vLogin() {
-  return `<div class="login foto"><form class="cx cartao" id="fLogin"><img src="/logo.png" alt="Mesa de Imbondeiro"><p class="mudo">Gestão de restaurantes e bares</p>
-    <label style="text-align:left">Utilizador</label><input name="login" autocomplete="username" autocapitalize="none" required>
+  setTimeout(carregaUsers, 0);
+  const d = ls.get('ulista', null), ult = ls.get('ultUser', '');
+  return `<div class="login foto"><form class="cx cartao" id="fLogin" autocomplete="off"><img src="/logo.png" alt="Mesa de Imbondeiro"><p class="mudo">Gestão de restaurantes e bares</p>
+    <label style="text-align:left">Utilizador</label>
+    <div class="ul"><input name="login" id="loginU" autocomplete="username" autocapitalize="none" required value="${esc(ult)}" placeholder="${!d || d.lista ? 'Toque para escolher o utilizador' : ''}"><button type="button" class="ul-b" data-a="abrirUsers" aria-label="Escolher utilizador" ${d && !d.lista ? 'hidden' : ''}>▾</button><div class="ul-l" id="uLista"></div></div>
     <label style="text-align:left">Palavra-passe</label><input name="password" type="password" autocomplete="current-password" required>
     <button class="btn p" style="width:100%;margin-top:16px">Entrar</button></form></div>`;
 }
@@ -520,7 +532,7 @@ function cfgForm(id, tabF, pre) {
     mesas: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'zona', label: 'Zona', value: r.zona || 'Sala' }, { k: 'local_id', label: 'Local', type: 'select', options: optLoc, value: r.local_id || S.local }, { k: 'lugares', label: 'Lugares', type: 'number', value: r.lugares || 4 }, { k: 'ordem', label: 'Ordem', type: 'number' }, { k: 'activo', label: 'Activa', type: 'check', value: novo ? true : r.activo }],
     locais: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'tipo', label: 'Tipo', type: 'select', options: [['restaurante', 'Restaurante'], ['bar', 'Bar'], ['esplanada', 'Esplanada'], ['takeaway', 'Take-away']] }, { k: 'morada', label: 'Morada' }, { k: 'slug', label: 'Endereço do menu (sem espaços)', ph: 'ex.: ilha-de-luanda' }, { k: 'imagem', label: 'Imagem de capa do menu digital', type: 'select', options: [['', 'Sem imagem'], ['/foto/esplanada.jpg', 'Esplanada'], ['/foto/terraco-sobre-o-mar.jpg', 'Terraço sobre o mar'], ['/foto/sala-da-trattoria.jpg', 'Sala interior'], ['/foto/balcao-da-grelha.jpg', 'Balcão da grelha'], ['/foto/patio-do-cafe.jpg', 'Pátio do café'], ['/foto/rooftop-ao-anoitecer.jpg', 'Rooftop ao anoitecer']] }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
     utilizadores: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'login', label: 'Nome de utilizador', req: 1 }, { k: 'perfil', label: 'Perfil', type: 'select', options: Object.entries(PERFIS) }, { k: 'local_id', label: 'Local', type: 'select', options: [['', 'Todos os locais']].concat(optLoc) }, { k: 'password', label: novo ? 'Palavra-passe (mín. 6 caracteres)' : 'Nova palavra-passe (vazio = manter)', type: 'password' }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
-    empresa: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'nif', label: 'NIF' }, { k: 'regime_iva', label: 'Regime de IVA', type: 'select', options: [['geral', 'Geral'], ['simplificado', 'Simplificado'], ['exclusao', 'Exclusão']] }, { k: 'taxa_iva', label: 'Taxa de IVA incluída nos preços (%) — confirme com o contabilista', type: 'number' }, { k: 'factura_software', label: 'Software de facturação certificado a ligar', ph: 'ex.: Primavera' }, { k: 'inss_taxa', label: 'Segurança Social a cargo do trabalhador (%) — confirme com o contabilista', type: 'number' }, { k: 'emb_preco', label: 'Preço da embalagem de take-away (Kz) — 0 para não cobrar', type: 'number' }, { k: 'emb_modo', label: 'Cobrar a embalagem', type: 'select', options: [['prato', 'Por cada prato da cozinha'], ['pedido', 'Uma vez por pedido']] }, { k: 'taxa_servico', label: 'Taxa de serviço nas contas de mesa (%) — 0 para não cobrar', type: 'number' }, { k: 'obs_cozinha', label: 'Observações rápidas da cozinha, separadas por vírgulas (vazio = lista padrão)', ph: 'Bem passado, Sem batata, Só arroz…' }, { k: 'obs_bar', label: 'Observações rápidas do bar, separadas por vírgulas (vazio = lista padrão)', ph: 'Sem gelo, Com limão…' }, { k: 'tema', label: 'Aspecto da app e do menu digital', type: 'select', options: [['classico', 'Clássico — terracota e creme'], ['luxo', 'Luxo — preto e dourado, para restaurantes de alto nível']] }],
+    empresa: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'nif', label: 'NIF' }, { k: 'regime_iva', label: 'Regime de IVA', type: 'select', options: [['geral', 'Geral'], ['simplificado', 'Simplificado'], ['exclusao', 'Exclusão']] }, { k: 'taxa_iva', label: 'Taxa de IVA incluída nos preços (%) — confirme com o contabilista', type: 'number' }, { k: 'factura_software', label: 'Software de facturação certificado a ligar', ph: 'ex.: Primavera' }, { k: 'inss_taxa', label: 'Segurança Social a cargo do trabalhador (%) — confirme com o contabilista', type: 'number' }, { k: 'emb_preco', label: 'Preço da embalagem de take-away (Kz) — 0 para não cobrar', type: 'number' }, { k: 'emb_modo', label: 'Cobrar a embalagem', type: 'select', options: [['prato', 'Por cada prato da cozinha'], ['pedido', 'Uma vez por pedido']] }, { k: 'taxa_servico', label: 'Taxa de serviço nas contas de mesa (%) — 0 para não cobrar', type: 'number' }, { k: 'obs_cozinha', label: 'Observações rápidas da cozinha, separadas por vírgulas (vazio = lista padrão)', ph: 'Bem passado, Sem batata, Só arroz…' }, { k: 'obs_bar', label: 'Observações rápidas do bar, separadas por vírgulas (vazio = lista padrão)', ph: 'Sem gelo, Com limão…' }, { k: 'login_lista', label: 'Mostrar a lista de utilizadores no ecrã de entrada (para escolher em vez de escrever)', type: 'check' }, { k: 'tema', label: 'Aspecto da app e do menu digital', type: 'select', options: [['classico', 'Clássico — terracota e creme'], ['luxo', 'Luxo — preto e dourado, para restaurantes de alto nível']] }],
   }[tab].map((c) => (c.value === undefined ? Object.assign(c, { value: r[c.k] }) : c));
   form((novo && tab !== 'empresa' ? 'Novo registo' : 'Editar') + ' — ' + CFG_TABS.find((t) => t[0] === tab)[1], campos, async (v) => {
     const pl = v.preco_local; delete v.preco_local;
@@ -537,7 +549,10 @@ function cfgForm(id, tabF, pre) {
 const ACOES = {
   fechar: () => { fechar(); },
   recarregar: () => { ['caixa', 'fact', 'rel', 'cfg'].forEach((k) => delete S.x[k]); render(); },
-  eu: () => modal(`<h2>${esc(S.user.nome)}</h2><p class="mudo">${PERFIS[S.user.perfil]} · utilizador «${esc(S.user.login)}»</p><div class="fila" style="margin-top:14px"><button class="btn" data-a="mudarPass">Alterar palavra-passe</button><span class="esp"></span><button class="btn" data-a="fechar">Fechar</button><button class="btn perigo" data-a="sair">Sair</button></div>`),
+  eu: () => modal(`<h2>${esc(S.user.nome)}</h2><p class="mudo">${PERFIS[S.user.perfil]} · utilizador «${esc(S.user.login)}»</p><div class="fila" style="margin-top:14px"><button class="btn" data-a="mudarPass">Alterar palavra-passe</button><button class="btn" data-a="trocarUser">Trocar de utilizador</button><span class="esp"></span><button class="btn" data-a="fechar">Fechar</button><button class="btn perigo" data-a="sair">Sair</button></div>`),
+  abrirUsers: () => { const l = $('#uLista'); if (!l) return; S.x.uFil = ''; l.innerHTML = listaUsers(); l.classList.add('on'); },
+  escolherUser: (el) => { const i = $('#loginU'); i.value = el.dataset.l; $('#uLista').classList.remove('on'); const pw = $('#fLogin').password; pw.value = ''; pw.focus(); },
+  trocarUser: () => { if (S.queue.length) { toast('Espere que as operações por sincronizar sejam enviadas', 'erro'); return; } fechar(); ls.del('ultUser'); sair(true); setTimeout(() => ACOES.abrirUsers(), 50); },
   sair: () => { if (S.queue.length && !confirm('Há ' + S.queue.length + ' operação(ões) por sincronizar. Se sair agora perdem-se. Sair mesmo assim?')) return; S.queue = []; ls.del('queue'); fechar(); sair(); },
   mudarPass: () => form('Alterar palavra-passe', [{ k: 'actual', label: 'Palavra-passe actual', type: 'password', req: 1 }, { k: 'nova', label: 'Nova palavra-passe (mín. 6 caracteres)', type: 'password', req: 1 }], async (v) => { await api('password', { method: 'POST', body: v }); toast('Palavra-passe alterada'); }),
   mesa: (el) => { if (S.x.editar) return; S.x.verConta = false; S.x.busca = ''; const p = S.st.pedidos.find((x) => x.mesa_id === el.dataset.id); if (p) return ir('pedido/' + p.id); if (!pode('pedir')) return;
@@ -657,7 +672,7 @@ document.addEventListener('submit', async (e) => {
   e.preventDefault();
   try {
     const r = await api('login', { method: 'POST', body: { login: e.target.login.value, password: e.target.password.value } });
-    S.token = r.token; S.user = r.user; ls.set('token', r.token); ls.set('user', r.user);
+    S.token = r.token; S.user = r.user; ls.set('token', r.token); ls.set('user', r.user); ls.set('ultUser', r.user.login);
     if (S.st && r.user.local_id && S.local !== r.user.local_id) { S.st = null; S.local = r.user.local_id; }
     render(); sync();
   } catch (er) { toast(er.message, 'erro'); }
@@ -665,7 +680,8 @@ document.addEventListener('submit', async (e) => {
 document.addEventListener('change', (e) => { if (e.target.id === 'fotoF' && e.target.files[0]) { const im = e.target.closest('.foto-f').querySelector('img'); if (im) im.src = URL.createObjectURL(e.target.files[0]); }
   if (e.target.id === 'selLocal') { if (S.queue.length) { toast('Aguarde a sincronização antes de mudar de local', 'erro'); e.target.value = S.local; return; } S.local = e.target.value; S.x = {}; S.st = null; guardar(); render(); sync(); } });
 window.addEventListener('hashchange', () => { if (!['cozinha', 'bar'].includes(rota().v)) document.body.classList.remove('kds-full'); fechar(); document.body.classList.remove('menu-on'); Object.keys(S.x).forEach((k) => { if (S.x[k] && typeof S.x[k] === 'object' && 'pronto' in S.x[k]) delete S.x[k]; }); render(); });
-document.addEventListener('input', (e) => { if (e.target.id === 'buscaArt') { S.x.artB = e.target.value; const g = $('#artG'); if (g) g.innerHTML = artGrelha(); return; }
+document.addEventListener('input', (e) => { if (e.target.id === 'loginU') { const l = $('#uLista'); if (l && (ls.get('ulista', null) || {}).lista) { S.x.uFil = e.target.value; l.innerHTML = listaUsers(); l.classList.add('on'); } return; }
+  if (e.target.id === 'buscaArt') { S.x.artB = e.target.value; const g = $('#artG'); if (g) g.innerHTML = artGrelha(); return; }
   if (e.target.id === 'busca') { S.x.busca = e.target.value; const p = P(rota().id); if (p) $('#arts').innerHTML = artsHtml(p); } });
 /* Arrastar mesas na planta (modo de edição) */
 let arr = null;
@@ -687,3 +703,7 @@ document.addEventListener('keydown', (e) => { if (!S.token || rota().v !== 'pedi
   if (e.key === 'F4') { e.preventDefault(); const b = $('#busca'); if (b) { b.focus(); b.select(); } return; }
   const el = ATALHOS[e.key] && $('.pdv ' + ATALHOS[e.key]); if (ATALHOS[e.key]) e.preventDefault(); if (el && !el.disabled) el.click(); });
 function boot() { render(); sync(); }
+
+document.addEventListener('focusin', (e) => { if (e.target.id === 'loginU' && (ls.get('ulista', null) || { lista: true }).lista) ACOES.abrirUsers(); });
+document.addEventListener('click', (e) => { const l = $('#uLista'); if (l && l.classList.contains('on') && !e.target.closest('.ul')) l.classList.remove('on'); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const l = $('#uLista'); if (l) l.classList.remove('on'); } });

@@ -437,6 +437,10 @@ global.__t1 = (async () => {
   cg = await call('GET', 'cfg'); assert.deepEqual(cg.utilizadores.filter((x) => x.id.startsWith('demo-u-')).map((x) => x.login).sort(), ['bar', 'caixa', 'chefe', 'cozinha', 'empregado', 'empregado2', 'gerente']);
   const entra = async (login) => { const r = await raw('POST', 'login', { login, password: '123' }); assert.equal(r.status, 200, login); return r.json; };
   for (const [lg, pf] of [['gerente', 'gerente'], ['chefe', 'chefe'], ['caixa', 'caixa'], ['empregado', 'empregado'], ['empregado2', 'empregado'], ['cozinha', 'cozinha'], ['bar', 'bar']]) assert.equal((await entra(lg)).user.perfil, pf);
+  token = ''; let ll = await call('GET', 'login-lista'); assert.equal(ll.lista, true); assert.ok(ll.utilizadores.some((x) => x.login === 'empregado' && x.perfil === 'empregado')); assert.ok(!('pass_hash' in ll.utilizadores[0])); assert.equal(ll.utilizadores[0].perfil, 'admin');
+  token = tk; const emp0 = (await call('GET', 'cfg')).empresa; await call('POST', 'cfg', { entidade: 'empresa', linha: { ...emp0, login_lista: false } }); token = '';
+  ll = await call('GET', 'login-lista'); assert.deepEqual(ll, { lista: false, utilizadores: [] });
+  token = tk; await call('POST', 'cfg', { entidade: 'empresa', linha: { ...emp0, login_lista: true } }); assert.equal((await call('GET', 'cfg')).empresa.login_lista, true);
   token = (await entra('chefe')).token;                                    // chefe de sala: pede, cobra, faz descontos e anula; não vê salários nem configuração
   r = await ops({ tipo: 'pedido.abrir', d: { id: 'cs1', local_id: L, tipo: 'balcao' } }, { tipo: 'linha.add', d: { id: 'cs1a', pedido_id: 'cs1', artigo_id: muf.id, qtd: 1 } }, { tipo: 'pedido.desconto', d: { pedido_id: 'cs1', valor: 500 } }, { tipo: 'pedido.anular', d: { pedido_id: 'cs1', motivo: 'teste' } }); assert.ok(r.every((x) => x.ok), JSON.stringify(r));
   assert.equal((await raw('GET', 'salarios', null, { mes: '2026-11' })).status, 403); assert.equal((await raw('GET', 'cfg')).status, 403);

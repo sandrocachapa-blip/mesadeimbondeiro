@@ -491,3 +491,16 @@ body.modo-app .tabs-m a.on { color: var(--terra); background: rgba(176,63,27,.09
 body.modo-app .tabs-m i { position: absolute; top: 4px; left: 54%; min-width: 20px; height: 20px; border-radius: 99px; background: #2A6B31; color: #fff; font: 700 12px/20px var(--texto); text-align: center; padding: 0 5px; }
 body.modo-app.kds-full .tabs-m { display: none; }
 body.modo-app.tema-luxo .tabs-m { background: rgba(11,10,8,.96); border-top: 1px solid #8C7335; } body.modo-app.tema-luxo .tabs-m a, body.modo-app.tema-luxo .tabs-m button { color: #A99C82; } body.modo-app.tema-luxo .tabs-m a.on { color: #E7D3A1; background: rgba(201,169,97,.12); }
+
+/* ---------- v16: escolher o utilizador no ecrã de entrada ---------- */
+.ul { position: relative; text-align: left; } .ul input { padding-right: 46px; }
+.ul-b { position: absolute; right: 4px; top: 4px; bottom: 4px; width: 40px; border: 0; border-radius: 8px; background: transparent; color: var(--castanho-2); font-size: 16px; }
+.ul-l { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 40; max-height: min(360px, 52vh); overflow: auto; background: #fff; border: 1px solid var(--linha); border-radius: 14px; box-shadow: 0 22px 40px -18px rgba(44,14,5,.6); padding: 6px; }
+.ul-l.on { display: block; }
+.ul-u { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; background: none; padding: 9px 10px; border-radius: 10px; text-align: left; color: var(--castanho); min-height: 52px; }
+.ul-u:hover, .ul-u:focus-visible { background: #F7EEDF; outline: none; }
+.ul-u i { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font: 700 13px var(--texto); font-style: normal; color: #fff; flex: none; background: var(--castanho-2); }
+.ul-u span { display: flex; flex-direction: column; min-width: 0; } .ul-u b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ul-u small { color: var(--castanho-2); font-size: 12.5px; }
+.ul-v { padding: 12px; margin: 0; }
+.pf-admin { background: #4A1A0C !important; } .pf-gerente { background: #B03F1B !important; } .pf-chefe { background: #8E55B5 !important; } .pf-caixa { background: #1C97A8 !important; } .pf-empregado { background: #2F74C0 !important; } .pf-cozinha { background: #2A9A52 !important; } .pf-bar { background: #C98500 !important; }
+.tema-luxo .ul-l { background: #14120E; border-color: #8C7335; } .tema-luxo .ul-u { color: #EFE6D2; } .tema-luxo .ul-u:hover { background: #1F1B14; } .tema-luxo .ul-u small, .tema-luxo .ul-b { color: #A99C82; }
