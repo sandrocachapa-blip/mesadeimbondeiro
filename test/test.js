@@ -265,3 +265,35 @@ global.__t1 = (async () => {
   assert.equal((await raw('GET', 'reg', null, { e: 'clientes' })).json.filter((c) => c.telefone === '923 555 777').length, 1);
   console.log('OK — pedido do cliente com registo');
 })().catch((e) => { console.error(e); process.exit(1); });
+// ---- Stock sai ao validar a saída; histórico com conta e factura ----
+(async () => {
+  await global.__t1; await new Promise((r) => setTimeout(r, 20000));
+  const { PGlite } = require('@electric-sql/pglite');
+  const core = require('../lib/core'); core._reset();
+  const pg = new PGlite();
+  const db = { q: async (t, p) => (await pg.query(t, p)).rows, tx: (fn) => pg.transaction((tx) => fn(async (t, p) => (await tx.query(t, p)).rows)) };
+  const env = { AUTH_SECRET: 's', ADMIN_PASSWORD: 'segredo1' };
+  let token = '';
+  const call = async (method, path, body, query) => { const r = await core.handle(db, env, { method, path: '/api/' + path, body, query: query || {}, token }); if (r.status !== 200) throw new Error(path + ' -> ' + r.status + ' ' + JSON.stringify(r.json)); return r.json; };
+  const ops = async (...l) => { const r = (await call('POST', 'ops', { ops: l.map((o) => ({ id: 'o' + Math.random(), ts: new Date().toISOString(), ...o })) })).resultados; assert.ok(r.every((x) => x.ok), JSON.stringify(r)); };
+  token = (await call('POST', 'login', { login: 'admin', password: 'segredo1' })).token;
+  const st = await call('GET', 'state'), L = st.local.id, muf = st.artigos.find((a) => a.nome === 'Mufete'), cer = st.artigos.find((a) => a.nome === 'Cerveja nacional');
+  const peixe = (await call('POST', 'reg', { entidade: 'ingredientes', linha: { nome: 'Peixe', unidade: 'kg', custo_medio: 3000 } })).id, gar = (await call('POST', 'reg', { entidade: 'ingredientes', linha: { nome: 'Cerveja', unidade: 'un', custo_medio: 600 } })).id;
+  await call('POST', 'fichas', { artigo_id: muf.id, linhas: [{ ingrediente_id: peixe, qtd: 0.5 }] }); await call('POST', 'fichas', { artigo_id: cer.id, linhas: [{ ingrediente_id: gar, qtd: 1 }] });
+  await call('POST', 'stock', { tipo: 'entrada', local: L, ingrediente_id: peixe, qtd: 10 }); await call('POST', 'stock', { tipo: 'entrada', local: L, ingrediente_id: gar, qtd: 48 });
+  const qt = async (id) => (await call('GET', 'stock', null, { local: L })).itens.find((i) => i.id === id).qtd;
+  await ops({ tipo: 'turno.abrir', d: { id: 't', local_id: L } }, { tipo: 'pedido.abrir', d: { id: 'p', local_id: L, mesa_id: st.mesas[0].id } }, { tipo: 'linha.add', d: { id: 'a', pedido_id: 'p', artigo_id: muf.id, qtd: 2 } }, { tipo: 'linha.add', d: { id: 'b', pedido_id: 'p', artigo_id: cer.id, qtd: 3 } }, { tipo: 'pedido.enviar', d: { pedido_id: 'p' } });
+  assert.equal(await qt(peixe), 10);
+  await ops({ tipo: 'linha.estado', d: { id: 'a', estado: 'preparar' } }); assert.equal(await qt(peixe), 10);        // aceitar não mexe no stock
+  await ops({ tipo: 'linha.estado', d: { id: 'a', estado: 'pronto' } }); assert.equal(await qt(peixe), 9);           // validar a saída baixa
+  await ops({ tipo: 'linha.estado', d: { id: 'a', estado: 'entregue' } }); assert.equal(await qt(peixe), 9);         // não baixa duas vezes
+  assert.equal(await qt(gar), 48);                                                                                    // a cerveja ainda não foi validada
+  await ops({ tipo: 'pagamento.add', d: { id: 'g', pedido_id: 'p', meio: 'tpa', valor: 33500 } }, { tipo: 'pedido.fechar', d: { pedido_id: 'p' } });
+  assert.equal(await qt(peixe), 9); assert.equal(await qt(gar), 45);                                                  // o que faltava sai ao fechar
+  await call('POST', 'facturacao', { ids: ['p'], estado: 'enviado', ref: 'FT 2026/55' });
+  const h = await call('GET', 'stock-saidas', null, { local: L });
+  assert.equal(h.linhas.length, 2); assert.ok(h.linhas.every((x) => x.sync_ref === 'FT 2026/55' && x.doc_num === 1 && x.mesa_nome === 'Mesa 1'));
+  assert.equal(h.linhas.find((x) => x.ingrediente === 'Peixe').motivo, '2× Mufete'); assert.equal(h.resumo.find((x) => x.ingrediente === 'Cerveja').qtd, 3);
+  assert.equal((await call('GET', 'stock-saidas', null, { local: L, ingrediente: gar })).linhas.length, 1);
+  console.log('OK — stock sai ao validar e fica com histórico');
+})().catch((e) => { console.error(e); process.exit(1); });

@@ -324,3 +324,4 @@ body.kds-full .lado, body.kds-full .topo, body.kds-full .vela { display: none !i
 body.kds-full .corpo { margin-left: 0; } body.kds-full main { max-width: none; padding: 18px 22px; }
 body.kds-full .tic button { font-size: 19px; padding: 14px; } body.kds-full .tic header { font-size: 19px; padding: 12px 14px; }
 body.kds-full .kds { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.est { white-space: nowrap; }

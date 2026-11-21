@@ -141,7 +141,7 @@ function menus() {
   if (pode('pagar')) op.push(['caixa', 'Caixa'], ['facturacao', 'Facturação']);
   op.push(['clientes', 'Clientes']);
   const g = [{ g: 'Operação', i: op }];
-  if (pode('cfg')) g.push({ g: 'Retaguarda', i: [['stock', 'Stock'], ['compras', 'Compras'], ['fornecedores', 'Fornecedores'], ['fichas', 'Fichas e custos']] });
+  if (pode('cfg')) g.push({ g: 'Stock e compras', i: [['stock', 'Stock'], ['compras', 'Compras'], ['fornecedores', 'Fornecedores'], ['fichas', 'Fichas e custos']] });
   if (pode('aprovar')) g.push({ g: 'Pessoas e dinheiro', i: [['equipa', 'Equipa e ponto'], ['salarios', 'Salários'], ['daf', 'Finanças (DAF)']] });
   else g[0].i.push(['equipa', 'Ponto']);
   if (pode('aprovar')) { const m = pode('admin') ? [['admin', 'Administração ao vivo']] : []; m.push(['painel', 'Painel e alertas'], ['relatorios', 'Relatórios']); if (pode('admin')) m.push(['grupo', 'Grupo']); m.push(['menu', 'Menu digital'], ['config', 'Configuração']); g.push({ g: 'Gestão', i: m }); }
