@@ -236,12 +236,14 @@ function vMesas() {
 function vPedido(id) {
   const st = S.st, p = P(id);
   if (!p) return `<div class="aviso">Esta conta já foi fechada.</div><a class="btn" href="#mesas">Voltar às mesas</a>`;
-  if (!S.fam || !st.familias.some((f) => f.id === S.fam)) S.fam = (st.familias[0] || {}).id;
+  const daCarta = st.familias.filter((f) => (f.carta === 'vinhos') === (S.x.carta === 'vinhos'));
+  if (!S.fam || !daCarta.some((f) => f.id === S.fam)) S.fam = (daCarta[0] || st.familias[0] || {}).id;
   const novos = p.linhas.filter((l) => l.estado === 'novo').length, pg = pago(p), bruto = p.total + (p.desconto || 0), itens = p.linhas.filter((l) => l.estado !== 'anulado').reduce((s, l) => s + l.qtd, 0);
   return `<div class="cab"><a class="btn s" href="#mesas">← Mesas</a><h1>${esc(p.mesa_nome)}</h1><span class="mudo">aberta por ${esc(p.aberto_por_nome)} às ${hora(p.aberto_em)}</span></div>
   <div class="pedido ${S.x.verConta ? 'vc' : ''}"><div class="carta">
-    <input id="busca" type="search" placeholder="Procurar artigo…" value="${esc(S.x.busca || '')}" autocomplete="off" style="margin-bottom:8px">
-    <div class="chips">${st.familias.map((f) => `<button class="chip ${f.id === S.fam ? 'on' : ''}" data-a="fam" data-id="${f.id}">${esc(f.nome)}</button>`).join('')}</div>
+    <div class="fila" style="margin-bottom:8px;flex-wrap:nowrap"><input id="busca" type="search" placeholder="Procurar artigo…" value="${esc(S.x.busca || '')}" autocomplete="off"><button class="btn s" data-a="disp" style="white-space:nowrap">Indisponíveis${st.artigos.some((a) => a.fora) ? ' (' + st.artigos.filter((a) => a.fora).length + ')' : ''}</button></div>
+    <div class="seg" style="margin-bottom:8px"><button class="${S.x.carta !== 'vinhos' ? 'on' : ''}" data-a="carta" data-c="menu">Menu</button><button class="${S.x.carta === 'vinhos' ? 'on' : ''}" data-a="carta" data-c="vinhos">Vinhos e bebidas alcoólicas</button></div>
+    <div class="chips">${st.familias.filter((f) => (f.carta === 'vinhos') === (S.x.carta === 'vinhos')).map((f) => `<button class="chip ${f.id === S.fam ? 'on' : ''}" data-a="fam" data-id="${f.id}">${esc(f.nome)}</button>`).join('')}</div>
     <div class="arts" id="arts">${artsHtml(p)}</div>
   </div>
   <div class="cartao conta">
@@ -271,7 +273,7 @@ function vPedido(id) {
 function artsHtml(p) {
   const b = (S.x.busca || '').trim().toLowerCase(), qt = (id) => p.linhas.filter((l) => l.artigo_id === id && l.estado === 'novo').reduce((s, l) => s + l.qtd, 0);
   const arts = S.st.artigos.filter((a) => (b ? a.nome.toLowerCase().includes(b) : a.familia_id === S.fam));
-  return arts.map((a) => { const n = qt(a.id); return `<button class="art ${n ? 'tem' : ''}" data-a="add" data-id="${a.id}">${n ? `<i>${n}</i>` : ''}<b>${esc(a.nome)}</b><span>${kz(a.preco)}</span></button>`; }).join('') || '<p class="mudo">Sem artigos.</p>';
+  return arts.map((a) => { const n = qt(a.id); return `<button class="art ${n ? 'tem' : ''} ${a.fora ? 'fora' : ''}" data-a="add" data-id="${a.id}">${n ? `<i>${n}</i>` : ''}<b>${esc(a.nome)}</b><span>${a.fora ? 'indisponível' : kz(a.preco)}</span></button>`; }).join('') || '<p class="mudo">Sem artigos.</p>';
 }
 
 function mReceber(id) {
@@ -300,6 +302,13 @@ function consulta(p) {
   window.print();
 }
 
+/* Retirar produtos do menu temporariamente (por local): somem do menu digital e ficam bloqueados nos pedidos */
+function mDisp() {
+  const st = S.st, sec = S.x.dispSec, fams = st.familias.filter((f) => !sec || f.seccao === sec), n = st.artigos.filter((a) => a.fora).length;
+  modal(`<h2>Produtos indisponíveis</h2><p class="mudo" style="margin:4px 0 10px">Toque num produto para o retirar do menu de ${esc(st.local.nome)}. Deixa de aparecer no menu digital e não pode ser pedido, até alguém o repor. Não apaga o produto nem mexe no preço.</p>
+    ${fams.map((f) => { const as = st.artigos.filter((a) => a.familia_id === f.id); return as.length ? `<h3 style="margin:12px 0 6px">${esc(f.nome)}</h3><div class="disp">${as.map((a) => `<button class="${a.fora ? 'fora' : ''}" data-a="dispTroca" data-id="${a.id}"><span>${esc(a.nome)}</span><b>${a.fora ? 'retirado' : 'no menu'}</b></button>`).join('')}</div>` : ''; }).join('')}
+    <div class="fila" style="margin-top:16px">${n ? `<button class="btn" data-a="dispTodos">Repor todos (${n})</button>` : ''}<span class="esp"></span><button class="btn p" data-a="fechar">Concluído</button></div>`, 'larga');
+}
 function apito() { try { const C = window.AudioContext || window.webkitAudioContext, c = apito.c || (apito.c = new C()); [0, 0.22].forEach((t) => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 880; o.connect(g); g.connect(c.destination); g.gain.setValueAtTime(0.25, c.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + t + 0.18); o.start(c.currentTime + t); o.stop(c.currentTime + t + 0.2); }); } catch (e) {} }
 function vKds(sec) {
   const de = (ests) => S.st.pedidos.map((p) => ({ p, ls: p.linhas.filter((l) => l.seccao === sec && ests.includes(l.estado)) })).filter((t) => t.ls.length)
@@ -313,7 +322,7 @@ function vKds(sec) {
   const tic = ({ p, ls }) => { const m = mins(ls[0].enviado_em || ls[0].criado_em), novos = ls.some((x) => x.estado === 'enviado');
     return `<div class="tic ${m >= 30 ? 'tarde pisca' : m >= 10 ? 'aviso' : ''}"><header><span>${esc(p.mesa_nome)}</span><span>${m} min · ${esc((p.aberto_por_nome || '').split(' ')[0])}</span></header>${ls.map(linha).join('')}
       <div class="tic-b">${novos ? `<button class="btn" data-a="kdsTodos" data-p="${p.id}" data-s="${sec}" data-de="enviado" data-para="preparar">Aceitar pedido</button>` : ''}<button class="btn p" data-a="kdsTodos" data-p="${p.id}" data-s="${sec}" data-de="enviado,preparar" data-para="pronto">Validar saída</button></div></div>`; };
-  return `<div class="cab"><h1>${sec === 'bar' ? 'Bar' : 'Cozinha'}</h1><span class="mudo">${fila.length} pedido(s) em fila · ${fila.reduce((s, t) => s + t.ls.reduce((a, l) => a + l.qtd, 0), 0)} artigo(s)</span><span class="esp"></span><button class="btn" data-a="kdsFull">${document.body.classList.contains('kds-full') ? 'Sair do ecrã inteiro' : 'Ecrã inteiro'}</button></div>
+  return `<div class="cab"><h1>${sec === 'bar' ? 'Bar' : 'Cozinha'}</h1><span class="mudo">${fila.length} pedido(s) em fila · ${fila.reduce((s, t) => s + t.ls.reduce((a, l) => a + l.qtd, 0), 0)} artigo(s)</span><span class="esp"></span><button class="btn" data-a="disp" data-s="${sec}">Produtos indisponíveis${S.st.artigos.some((a) => a.fora) ? ' (' + S.st.artigos.filter((a) => a.fora).length + ')' : ''}</button><button class="btn" data-a="kdsFull">${document.body.classList.contains('kds-full') ? 'Sair do ecrã inteiro' : 'Ecrã inteiro'}</button></div>
     <div class="kds-2"><div><h3 class="zona" style="margin-top:0">Por preparar</h3>${fila.length ? `<div class="kds">${fila.map(tic).join('')}</div>` : '<div class="cartao">Sem pedidos em espera.</div>'}</div>
     <div class="kds-p"><h3 class="zona" style="margin-top:0">Saída validada · a aguardar entrega</h3>${prontos.length ? prontos.map(({ p, ls }) => `<div class="tic pr"><header><span>${esc(p.mesa_nome)}</span><span>pronto</span></header>${ls.map((x) => `<button class="pronto" data-a="kds" data-id="${x.id}" data-e="pronto"><b>${x.qtd}×</b><span style="flex:1">${esc(x.nome)}</span></button>`).join('')}<div class="tic-b"><button class="btn" data-a="kdsTodos" data-p="${p.id}" data-s="${sec}" data-de="pronto" data-para="entregue">Entregue na mesa</button></div></div>`).join('') : '<p class="mudo">Nada a aguardar entrega.</p>'}</div></div>`;
 }
@@ -374,8 +383,8 @@ function vRel() {
 function vMenu() {
   const qr = (u, n, sub) => `<div class="cartao qr"><h2>${esc(n)}</h2>${sub ? `<p class="mudo">${sub}</p>` : ''}<p><img src="/api/qr?t=${encodeURIComponent(u)}" alt="Código QR" loading="lazy"></p><div class="fila" style="justify-content:center"><a class="btn s" href="${esc(u)}" target="_blank" rel="noopener">Abrir</a><button class="btn s p" data-a="impQr" data-u="${esc(u)}" data-n="${esc(n)}">Imprimir QR</button></div></div>`;
   const base = location.origin + '/menu?l=' + encodeURIComponent(S.st.local.slug);
-  return `<div class="cab"><h1>Menu digital</h1></div><div class="aviso">O QR do local mostra só a carta. O QR de cada mesa deixa o cliente pedir: o pedido entra na conta dessa mesa como «pedido do cliente» e só segue para a cozinha depois de o empregado o confirmar com «Enviar pedido».</div>
-    <h3 class="zona">Carta de ${esc(S.st.local.nome)}</h3><div class="fases">${qr(base, S.st.local.nome, 'Só consulta')}</div>
+  return `<div class="cab"><h1>Menu digital</h1><span class="esp"></span><button class="btn p" data-a="disp">Retirar produtos temporariamente${S.st.artigos.some((a) => a.fora) ? ' (' + S.st.artigos.filter((a) => a.fora).length + ' fora)' : ''}</button></div><div class="aviso">O QR do local mostra só a carta. O QR de cada mesa deixa o cliente pedir: o pedido entra na conta dessa mesa como «pedido do cliente» e só segue para a cozinha depois de o empregado o confirmar com «Enviar pedido».</div>
+    <h3 class="zona">Carta de ${esc(S.st.local.nome)}</h3><div class="fases">${qr(base, S.st.local.nome, 'Menu · só consulta')}${qr(base + '#vinhos', 'Carta de vinhos e bar', 'Vinhos e bebidas alcoólicas · só consulta')}</div>
     <h3 class="zona">Reservas online</h3><div class="fases">${qr(base + '#reservar', 'Reservar em ' + S.st.local.nome, 'O cliente pede a reserva; fica «por confirmar» em Reservas')}</div>
     <h3 class="zona">Pedido na mesa</h3><div class="fases">${S.st.mesas.map((m) => qr(base + '&m=' + m.id, m.nome, esc(m.zona))).join('')}</div>`;
 }
@@ -391,7 +400,7 @@ function vCfg() {
   let corpo = '';
   const T = (cols, rows) => `<table><tr>${cols.map((x) => `<th>${x}</th>`).join('')}</tr>${rows.map((r) => `<tr class="clic" data-a="cfgEdit" data-id="${r[0]}">${r.slice(1).map((x) => `<td>${x}</td>`).join('')}</tr>`).join('')}</table>`;
   if (tab === 'artigos') corpo = T(['Artigo', 'Família', 'Preço base', 'Preço em ' + esc(S.st.local.nome), 'Activo', 'No menu digital'], d.artigos.map((a) => [a.id, esc(a.nome), esc(fam(a.familia_id)), kz(a.preco), pl(a.id) != null ? kz(pl(a.id)) : '<span class="mudo">igual ao base</span>', sn(a.activo), sn(a.no_menu)]));
-  if (tab === 'familias') corpo = T(['Família', 'Preparada em', 'Ordem', 'Activa'], d.familias.map((f) => [f.id, esc(f.nome), f.seccao === 'bar' ? 'Bar' : 'Cozinha', f.ordem, sn(f.activo)]));
+  if (tab === 'familias') corpo = T(['Família', 'Carta', 'Preparada em', 'Ordem', 'Activa'], d.familias.map((f) => [f.id, esc(f.nome), f.carta === 'vinhos' ? 'Vinhos e bebidas alcoólicas' : 'Menu', f.seccao === 'bar' ? 'Bar' : 'Cozinha', f.ordem, sn(f.activo)]));
   if (tab === 'mesas') corpo = T(['Mesa', 'Zona', 'Local', 'Lugares', 'Activa'], d.mesas.map((m) => [m.id, esc(m.nome), esc(m.zona), esc(loc(m.local_id)), m.lugares, sn(m.activo)]));
   if (tab === 'locais') corpo = T(['Local', 'Tipo', 'Morada', 'Endereço do menu', 'Activo'], d.locais.map((l) => [l.id, esc(l.nome), esc(l.tipo), esc(l.morada), '/menu?l=' + esc(l.slug), sn(l.activo)]));
   if (tab === 'utilizadores') corpo = T(['Nome', 'Utilizador', 'Perfil', 'Local', 'Activo'], d.utilizadores.map((u) => [u.id, esc(u.nome), esc(u.login), PERFIS[u.perfil] || u.perfil, esc(loc(u.local_id)), sn(u.activo)]));
@@ -406,7 +415,7 @@ function cfgForm(id) {
   const campos = {
     artigos: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'familia_id', label: 'Família', type: 'select', options: d.familias.map((f) => [f.id, f.nome]) }, { k: 'descricao', label: 'Descrição (aparece no menu digital)' }, { k: 'preco', label: 'Preço base (Kz)', type: 'number', req: 1 },
       { k: 'preco_local', label: 'Preço só em ' + S.st.local.nome + ' (vazio = igual ao base)', type: 'number', value: (d.precos.find((p) => p.artigo_id === r.id && p.local_id === S.local) || {}).preco }, { k: 'no_menu', label: 'Mostrar no menu digital', type: 'check', value: novo ? true : r.no_menu }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
-    familias: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'seccao', label: 'Preparada em', type: 'select', options: [['cozinha', 'Cozinha'], ['bar', 'Bar']] }, { k: 'ordem', label: 'Ordem na carta', type: 'number' }, { k: 'activo', label: 'Activa', type: 'check', value: novo ? true : r.activo }],
+    familias: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'carta', label: 'Aparece em', type: 'select', options: [['menu', 'Menu (comida e bebidas sem álcool)'], ['vinhos', 'Carta de vinhos e bebidas alcoólicas']] }, { k: 'seccao', label: 'Preparada em', type: 'select', options: [['cozinha', 'Cozinha'], ['bar', 'Bar']] }, { k: 'ordem', label: 'Ordem na carta', type: 'number' }, { k: 'activo', label: 'Activa', type: 'check', value: novo ? true : r.activo }],
     mesas: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'zona', label: 'Zona', value: r.zona || 'Sala' }, { k: 'local_id', label: 'Local', type: 'select', options: optLoc, value: r.local_id || S.local }, { k: 'lugares', label: 'Lugares', type: 'number', value: r.lugares || 4 }, { k: 'ordem', label: 'Ordem', type: 'number' }, { k: 'activo', label: 'Activa', type: 'check', value: novo ? true : r.activo }],
     locais: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'tipo', label: 'Tipo', type: 'select', options: [['restaurante', 'Restaurante'], ['bar', 'Bar'], ['esplanada', 'Esplanada'], ['takeaway', 'Take-away']] }, { k: 'morada', label: 'Morada' }, { k: 'slug', label: 'Endereço do menu (sem espaços)', ph: 'ex.: ilha-de-luanda' }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
     utilizadores: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'login', label: 'Nome de utilizador', req: 1 }, { k: 'perfil', label: 'Perfil', type: 'select', options: Object.entries(PERFIS) }, { k: 'local_id', label: 'Local', type: 'select', options: [['', 'Todos os locais']].concat(optLoc) }, { k: 'password', label: novo ? 'Palavra-passe (mín. 6 caracteres)' : 'Nova palavra-passe (vazio = manter)', type: 'password' }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
@@ -442,6 +451,7 @@ const ACOES = {
     if (!op('pedido.abrir', { id, local_id: S.local, mesa_id: el.dataset.m, cliente_nome: r.cliente_nome })) return;
     S.st.reservas = S.st.reservas.filter((x) => x !== r); guardar(); fechar(); ir('pedido/' + id);
     api('reg', { method: 'POST', body: { entidade: 'reservas', linha: Object.assign({}, r, { estado: 'sentada' }) } }).catch(() => toast('Sem rede: marque a reserva como sentada em Reservas', 'erro')); },
+  carta: (el) => { S.x.carta = el.dataset.c; S.x.busca = ''; S.fam = ''; render(); },
   fam: (el) => { S.fam = el.dataset.id; S.x.busca = ''; render(); },
   ham: () => document.body.classList.toggle('menu-on'),
   grp: (el) => { (S.x.grpAb = S.x.grpAb || {})[el.dataset.g] = el.dataset.ab !== '1'; render(); },
@@ -465,7 +475,7 @@ const ACOES = {
   editarPlanta: () => { S.x.editar = !S.x.editar; S.x.pos = {}; S.x.sel = []; S.x.modoMesas = 'planta'; render(); },
   guardarPlanta: async () => { const ms = mesasVis().map((m) => Object.assign({ id: m.id }, posMesa(m, mesasVis().filter((y) => y.zona === m.zona).indexOf(m))));
     try { await api('planta', { method: 'POST', body: { mesas: ms } }); ms.forEach((x) => { const m = S.st.mesas.find((y) => y.id === x.id); m.x = x.x; m.y = x.y; m.forma = x.forma; }); S.x.pos = {}; guardar(); toast('Posições guardadas'); render(); } catch (e) { toast(e.message, 'erro'); } },
-  add: (el) => { const p = P(rota().id); if (!p) return; const l = p.linhas.find((x) => x.artigo_id === el.dataset.id && x.estado === 'novo' && !x.notas); if (l) op('linha.qtd', { id: l.id, qtd: l.qtd + 1 }); else op('linha.add', { id: uuid(), pedido_id: p.id, artigo_id: el.dataset.id, qtd: 1 }); render(); },
+  add: (el) => { const p = P(rota().id); if (!p) return; const ar = S.st.artigos.find((x) => x.id === el.dataset.id); if (ar && ar.fora) return toast(ar.nome + ' está temporariamente indisponível', 'erro'); const l = p.linhas.find((x) => x.artigo_id === el.dataset.id && x.estado === 'novo' && !x.notas); if (l) op('linha.qtd', { id: l.id, qtd: l.qtd + 1 }); else op('linha.add', { id: uuid(), pedido_id: p.id, artigo_id: el.dataset.id, qtd: 1 }); render(); },
   mais: (el) => { const [, l] = linhaDe(el.dataset.id); if (l) { op('linha.qtd', { id: l.id, qtd: l.qtd + 1 }); render(); } },
   menos: (el) => { const [, l] = linhaDe(el.dataset.id); if (l) { op('linha.qtd', { id: l.id, qtd: l.qtd - 1 }); render(); } },
   nota: (el) => { const [, l] = linhaDe(el.dataset.id); if (l) form('Nota para ' + l.nome, [{ k: 'notas', label: 'Nota (ex.: sem jindungo, mal passado)', value: l.notas }], (v) => { op('linha.qtd', { id: l.id, qtd: l.qtd, notas: v.notas }); render(); }); },
@@ -481,6 +491,10 @@ const ACOES = {
     if (op('pagamento.add', { id: uuid(), pedido_id: p.id, meio: el.dataset.m, valor: Math.min(v, falta) })) mReceber(p.id); render(); },
   rmPag: (el) => { S.x.rec.troco = 0; op('pagamento.remover', { id: el.dataset.id }); mReceber(el.dataset.p); render(); },
   fecharConta: (el) => { if (op('pedido.fechar', { pedido_id: el.dataset.id, cliente_nome: $('#recNome').value.trim(), cliente_nif: $('#recNif').value.trim() })) { fechar(); toast('Conta fechada'); delete S.x.fact; delete S.x.caixa; ir('mesas'); } },
+  disp: (el) => { S.x.dispSec = (el && el.dataset.s) || ''; mDisp(); },
+  dispTroca: async (el) => { const a = S.st.artigos.find((x) => x.id === el.dataset.id); if (!a) return; const fora = !a.fora;
+    try { await api('disponibilidade', { method: 'POST', body: { local: S.local, artigo_id: a.id, fora } }); a.fora = fora; guardar(); mDisp(); render(); } catch (e) { toast(e.offline ? 'Precisa de internet para alterar a disponibilidade' : e.message, 'erro'); } },
+  dispTodos: async () => { try { await api('disponibilidade', { method: 'POST', body: { local: S.local, todos: true } }); S.st.artigos.forEach((a) => { a.fora = false; }); guardar(); mDisp(); render(); toast('Todos os produtos voltaram ao menu'); } catch (e) { toast(e.message, 'erro'); } },
   kdsTodos: (el) => { const p = P(el.dataset.p); if (!p) return; const de = el.dataset.de.split(','); p.linhas.filter((l) => l.seccao === el.dataset.s && de.includes(l.estado)).forEach((l) => op('linha.estado', { id: l.id, estado: el.dataset.para })); if (el.dataset.para === 'pronto') toast('Saída validada: ' + p.mesa_nome); render(); },
   kdsFull: () => { const on = document.body.classList.toggle('kds-full'); try { if (on) document.documentElement.requestFullscreen(); else if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {} apito(); render(); },
   kds: (el) => { const seg = { enviado: 'preparar', preparar: 'pronto', pronto: 'entregue' }[el.dataset.e]; if (seg) { op('linha.estado', { id: el.dataset.id, estado: seg }); render(); } },

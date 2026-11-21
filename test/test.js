@@ -297,3 +297,31 @@ global.__t1 = (async () => {
   assert.equal((await call('GET', 'stock-saidas', null, { local: L, ingrediente: gar })).linhas.length, 1);
   console.log('OK — stock sai ao validar e fica com histórico');
 })().catch((e) => { console.error(e); process.exit(1); });
+// ---- Produtos temporariamente indisponíveis ----
+(async () => {
+  await global.__t1; await new Promise((r) => setTimeout(r, 23000));
+  const { PGlite } = require('@electric-sql/pglite');
+  const core = require('../lib/core'); core._reset();
+  const pg = new PGlite();
+  const db = { q: async (t, p) => (await pg.query(t, p)).rows, tx: (fn) => pg.transaction((tx) => fn(async (t, p) => (await tx.query(t, p)).rows)) };
+  const env = { AUTH_SECRET: 's', ADMIN_PASSWORD: 'segredo1' };
+  let token = '';
+  const raw = (method, path, body, query) => core.handle(db, env, { method, path: '/api/' + path, body, query: query || {}, token });
+  token = (await raw('POST', 'login', { login: 'admin', password: 'segredo1' })).json.token;
+  let st = (await raw('GET', 'state')).json; const L = st.local.id, a = st.artigos.find((x) => x.nome === 'Mufete'), b = st.artigos.find((x) => x.nome === 'Café'), mesa = st.mesas[0].id;
+  const noMenu = async () => (await raw('GET', 'menu', null, { l: 'principal' })).json.familias.flatMap((f) => f.artigos).some((x) => x.nome === 'Mufete');
+  const ops = async (l) => (await raw('POST', 'ops', { ops: l.map((o) => ({ id: 'o' + Math.random(), ts: new Date().toISOString(), ...o })) })).json.resultados;
+  assert.ok(await noMenu());
+  assert.equal((await raw('POST', 'disponibilidade', { local: L, artigo_id: a.id, fora: true })).status, 200);
+  st = (await raw('GET', 'state')).json; assert.equal(st.artigos.find((x) => x.id === a.id).fora, true); assert.equal(st.artigos.find((x) => x.id === b.id).fora, false);
+  assert.equal(await noMenu(), false);
+  let r = await ops([{ tipo: 'pedido.abrir', d: { id: 'p', local_id: L, mesa_id: mesa } }, { tipo: 'linha.add', d: { id: 'x', pedido_id: 'p', artigo_id: a.id, qtd: 1 } }, { tipo: 'linha.add', d: { id: 'y', pedido_id: 'p', artigo_id: b.id, qtd: 1 } }]);
+  assert.deepEqual(r.map((x) => x.ok), [true, false, true]);
+  const tk = token; token = '';
+  await raw('POST', 'pedido-publico', { l: 'principal', mesa, itens: [{ artigo_id: a.id, qtd: 1 }, { artigo_id: b.id, qtd: 1 }] });
+  token = tk; st = (await raw('GET', 'state')).json; assert.equal(st.pedidos[0].linhas.filter((l) => l.nome === 'Mufete').length, 0); assert.equal(st.pedidos[0].linhas.length, 2);
+  assert.equal((await raw('POST', 'disponibilidade', { local: L, artigo_id: a.id, fora: false })).status, 200); assert.ok(await noMenu());
+  await raw('POST', 'disponibilidade', { local: L, artigo_id: b.id, fora: true }); await raw('POST', 'disponibilidade', { local: L, todos: true });
+  assert.equal((await raw('GET', 'disponibilidade', null, { local: L })).json.fora.length, 0);
+  console.log('OK — produtos indisponíveis');
+})().catch((e) => { console.error(e); process.exit(1); });
