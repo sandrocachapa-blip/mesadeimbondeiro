@@ -290,3 +290,35 @@ function atencao(d) {
 VIEWS.admin = vAdmin;
 setInterval(() => { if (!S.token || rota().v !== 'admin' || document.hidden || $('#modal').classList.contains('on')) return;
   api('admin').then((d) => { S.x.adm = { pronto: true, d }; if (rota().v === 'admin') { const y = window.scrollY; render(); window.scrollTo(0, y); } }).catch(() => {}); }, 15000);
+
+/* ---------- Entregas ao domicílio ---------- */
+const L_BAI = { e: 'bairros', tit: 'Bairros e taxas de entrega', novo: 'Novo bairro',
+  cols: [['Bairro', (r) => esc(r.nome)], ['Taxa de entrega', (r) => kz(r.taxa)], ['Activo', (r) => sn(r.activo)]],
+  campos: (r) => [{ k: 'nome', label: 'Bairro', req: 1 }, { k: 'taxa', label: 'Taxa de entrega (Kz)', type: 'number' }, cActivo(r)] };
+const ENT_COL = [['preparar', 'Em preparação'], ['caminho', 'A caminho'], ['entregue', 'Entregue · por receber']];
+function waLink(p) {
+  let n = String(p.cliente_tel || '').replace(/\D/g, ''); if (n.length === 9) n = '244' + n; if (n.length < 9) return '';
+  const t = { preparar: 'já está a ser preparado', caminho: 'saiu para entrega' + (p.estafeta ? ' com ' + p.estafeta : ''), entregue: 'foi entregue. Obrigado pela preferência' }[p.entrega_estado || 'preparar'];
+  return 'https://wa.me/' + n + '?text=' + encodeURIComponent('Olá ' + p.cliente_nome + ', o seu pedido de ' + S.st.empresa.nome + ' ' + t + '. Total: ' + kz(p.total) + '.');
+}
+function quadroEntregas() {
+  const ps = S.st.pedidos.filter((p) => p.tipo === 'entrega');
+  const cartao = (p) => { const ls = p.linhas.filter((l) => !AUTO.includes(l.seccao) && l.estado !== 'anulado'), ok = ls.filter((l) => ['pronto', 'entregue'].includes(l.estado)).length, e = p.entrega_estado || 'preparar', wa = waLink(p), falta = Math.max(0, p.total - pago(p));
+    return `<div class="cartao ent"><header><b>${esc(p.cliente_nome)}</b><span class="mudo">${mins(p.aberto_em)} min</span></header>
+      <p>${esc([p.bairro, p.morada].filter(Boolean).join(' · ')) || '<span class="mudo">sem morada</span>'}${p.cliente_tel ? `<br><a href="tel:${esc(p.cliente_tel)}">${esc(p.cliente_tel)}</a>` : ''}</p>
+      <p class="mudo">${ls.length ? ls.map((l) => l.qtd + '× ' + esc(l.nome)).join(', ') : 'Ainda sem artigos'}</p>
+      <div class="tot-l"><span>${ls.length ? `<span class="est ${ok === ls.length ? 'ok' : 'pendente'}">${ok} de ${ls.length} prontos</span>` : ''}${p.estafeta ? ' ' + esc(p.estafeta) : ''}</span><b>${falta ? kz(p.total) : 'Pago'}</b></div>
+      <div class="fila" style="margin-top:10px"><a class="btn s" href="#pedido/${p.id}">Abrir conta</a>${wa ? `<a class="btn s" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}<span class="esp"></span>
+      ${e === 'preparar' ? `<button class="btn p s" data-a="entSair" data-id="${p.id}">Saiu para entrega</button>` : e === 'caminho' ? `<button class="btn p s" data-a="entEstado" data-id="${p.id}" data-e="entregue">Entregue ao cliente</button>` : `<a class="btn p s" href="#pedido/${p.id}">${falta ? 'Receber' : 'Fechar conta'}</a>`}</div></div>`; };
+  return `<div class="kpis"><div class="cartao kpi">Entregas em curso<b>${ps.length}</b></div><div class="cartao kpi">Na rua<b>${ps.filter((p) => p.entrega_estado === 'caminho').length}</b></div><div class="cartao kpi">Valor por receber<b>${kz(ps.reduce((s, p) => s + Math.max(0, p.total - pago(p)), 0))}</b></div></div>
+    <div class="ent-q">${ENT_COL.map(([k, n]) => { const l = ps.filter((p) => (p.entrega_estado || 'preparar') === k); return `<div><h3 class="zona" style="margin-top:0">${n} · ${l.length}</h3>${l.map(cartao).join('') || '<p class="mudo">Nada aqui.</p>'}</div>`; }).join('')}</div>`;
+}
+VIEWS.entregas = () => `<div class="cab"><h1>Entregas</h1><span class="esp"></span><button class="btn p" data-a="entNova">Nova entrega</button></div>` + (pode('cfg') ? abas('abaEnt', [['quadro', 'Entregas em curso', quadroEntregas], ['bairros', 'Bairros e taxas', () => lista(L_BAI, true)]]) : quadroEntregas());
+ACOES.entNova = () => { const bs = S.st.bairros || [];
+  form('Nova entrega ao domicílio', [{ k: 'cliente_nome', label: 'Nome do cliente', req: 1 }, { k: 'cliente_tel', label: 'Telefone', type: 'tel' }, { k: 'bairro', label: 'Bairro', type: 'select', value: bs[0] ? bs[0].nome : '', options: bs.map((b) => [b.nome, b.nome + ' · ' + kz(b.taxa)]).concat([['', 'Outro bairro (indicar a taxa em baixo)']]) }, { k: 'morada', label: 'Morada e referências' }, { k: 'taxa', label: 'Taxa de entrega (Kz) — vazio usa a do bairro', type: 'number' }], (v) => {
+    const b = bs.find((x) => x.nome === v.bairro), id = uuid();
+    if (!op('pedido.abrir', { id, local_id: S.local, tipo: 'entrega', cliente_nome: v.cliente_nome, cliente_tel: v.cliente_tel, bairro: v.bairro, morada: v.morada, taxa_entrega: v.taxa === '' ? (b ? b.taxa : 0) : v.taxa })) return false;
+    S.x.verConta = false; S.x.busca = ''; ir('pedido/' + id);
+  }, '<p class="mudo" style="margin-top:10px">A taxa de entrega e a embalagem entram sozinhas na conta. Os bairros e as taxas definem-se no separador «Bairros e taxas».</p>'); };
+ACOES.entSair = (el) => { const p = P(el.dataset.id); if (!p) return; form('Saiu para entrega — ' + p.cliente_nome, [{ k: 'estafeta', label: 'Estafeta', value: p.estafeta || ls.get('estafeta', '') }], (v) => { ls.set('estafeta', v.estafeta); op('entrega.estado', { pedido_id: p.id, estado: 'caminho', estafeta: v.estafeta }); render(); }); };
+ACOES.entEstado = (el) => { op('entrega.estado', { pedido_id: el.dataset.id, estado: el.dataset.e }); render(); };

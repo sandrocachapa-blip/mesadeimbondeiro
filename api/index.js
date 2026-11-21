@@ -31,6 +31,7 @@ module.exports = async (req, res) => {
   const r = await handle(db(), process.env, { method: req.method, path, query, body, token });
   res.statusCode = r.status;
   res.setHeader('Cache-Control', 'no-store');
+  if (r.bin) { res.setHeader('Content-Type', r.mime); res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); return res.end(r.bin); }
   if (r.svg) { res.setHeader('Content-Type', 'image/svg+xml'); res.setHeader('Cache-Control', 'public, max-age=86400'); return res.end(r.svg); }
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(r.json));

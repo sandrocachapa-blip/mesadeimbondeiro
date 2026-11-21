@@ -162,7 +162,7 @@ global.__t1 = (async () => {
   let st = await call('GET', 'state'); const L = st.local.id;
   const hoje = new Date(Date.now() + 3600e3).toISOString().slice(0, 10), mes = hoje.slice(0, 7);
   // dados fictícios carregados sozinhos
-  assert.equal(st.locais.length, 2); assert.equal(st.pedidos.length, 3);
+  assert.equal(st.locais.length, 2); assert.equal(st.pedidos.length, 5); assert.equal(st.pedidos.filter((p) => p.tipo === "entrega").length, 2);
   const rel = await call('GET', 'relatorio', null, { local: L, de: '2020-01-01', ate: hoje }); assert.ok(rel.resumo.contas > 150 && rel.porMeio.length === 4);
   const sk = await call('GET', 'stock', null, { local: L }); assert.equal(sk.itens.length, 22); assert.ok(sk.itens.every((i) => i.qtd > 0), JSON.stringify(sk.itens.filter((i) => i.qtd <= 0)));
   const d = await call('GET', 'daf', null, { local: L, mes }); assert.ok(d.vendas > 0 && d.cmv > 0 && d.pessoal > 0 && d.despesas > 0 && d.bancos.length === 2 && d.pagarCompras.length > 0);
@@ -173,11 +173,11 @@ global.__t1 = (async () => {
   assert.ok((await call('GET', 'facturacao', null, { local: L })).docs.length > 100);
   assert.ok((await call('GET', 'turno', null, { local: L })).ultimos.length === 10);
   // juntar: duas mesas com conta + uma livre → uma só conta na principal
-  const oc = st.pedidos.map((p) => p.mesa_id), livre = st.mesas.find((m) => !oc.includes(m.id));
-  const tot = st.pedidos[0].total + st.pedidos[1].total;
+  const cm = st.pedidos.filter((p) => p.mesa_id), oc = cm.map((p) => p.mesa_id), livre = st.mesas.find((m) => !oc.includes(m.id));
+  const tot = cm[0].total + cm[1].total;
   await call('POST', 'mesas-juntar', { principal: oc[0], outras: [oc[1], livre.id] });
   st = await call('GET', 'state');
-  assert.equal(st.pedidos.length, 2); assert.equal(st.pedidos.find((p) => p.mesa_id === oc[0]).total, tot);
+  assert.equal(st.pedidos.filter((p) => p.mesa_id).length, 2); assert.equal(st.pedidos.find((p) => p.mesa_id === oc[0]).total, tot);
   assert.equal(st.mesas.filter((m) => m.junta_a === oc[0]).length, 2);
   const r = await ops({ tipo: 'pedido.abrir', d: { id: 'px', local_id: L, mesa_id: livre.id } }); assert.equal(r[0].ok, false); // a mesa junta responde pela principal, que está ocupada
   await call('POST', 'mesas-separar', { principal: oc[0] });
@@ -202,7 +202,7 @@ global.__t1 = (async () => {
   const a = await call('GET', 'admin');
   assert.equal(a.locais.length, 2); const r = a.locais[0];
   assert.ok(r.mes.vendas > 0 && r.mes.cmv > 0 && r.mes.pessoal > 0 && r.mes.despesas > 0);
-  assert.equal(r.agora.contas, 3); assert.equal(r.agora.mesas, 10); assert.ok(r.agora.cozinha.linhas + r.agora.bar.linhas > 0);
+  assert.equal(r.agora.contas, 5); assert.equal(r.agora.mesas, 10); assert.ok(r.agora.cozinha.linhas + r.agora.bar.linhas > 0);
   assert.ok(a.dinheiro.bancos > 0 && a.dinheiro.fornecedores > 0 && a.dinheiro.n_despesas === 1 && a.dinheiro.n_salarios === 8);
   assert.ok(r.pendentes.facturas > 0 && r.pendentes.stock_baixo >= 2 && r.pendentes.reservas === 3);
   assert.ok(a.eventos.length > 5 && a.difs.length > 0);
@@ -355,4 +355,62 @@ global.__t1 = (async () => {
   await ops({ tipo: 'pedido.abrir', d: { id: 't2', local_id: L, tipo: 'takeaway' } }, { tipo: 'linha.add', d: { id: 'g', pedido_id: 't2', artigo_id: muf, qtd: 1 } }, { tipo: 'pedido.transferir', d: { pedido_id: 't2', mesa_id: st.mesas[0].id } });
   assert.equal((await ped('t2')).total, 14500);                                                       // passou para mesa: embalagem sai
   console.log('OK — embalagem de take-away');
+})().catch((e) => { console.error(e); process.exit(1); });
+// ---- v11: imagens, fotografia, favoritos, taxa de serviço, entregas ----
+(async () => {
+  await global.__t1; await new Promise((r) => setTimeout(r, 29000));
+  const { PGlite } = require('@electric-sql/pglite');
+  const core = require('../lib/core'); core._reset();
+  const pg = new PGlite();
+  const db = { q: async (t, p) => (await pg.query(t, p)).rows, tx: (fn) => pg.transaction((tx) => fn(async (t, p) => (await tx.query(t, p)).rows)) };
+  const env = { AUTH_SECRET: 's', ADMIN_PASSWORD: 'segredo1' };
+  let token = '';
+  const raw = (method, path, body, query) => core.handle(db, env, { method, path: '/api/' + path, body, query: query || {}, token });
+  const call = async (method, path, body, query) => { const r = await raw(method, path, body, query); if (r.status !== 200) throw new Error(path + ' -> ' + r.status + ' ' + JSON.stringify(r.json)); return r.json; };
+  const ops = async (...l) => (await call('POST', 'ops', { ops: l.map((o) => ({ id: 'o' + Math.random(), ts: new Date().toISOString(), ...o })) })).resultados;
+  token = (await call('POST', 'login', { login: 'admin', password: 'segredo1' })).token;
+  let st = await call('GET', 'state'); const L = st.local.id, muf = st.artigos.find((a) => a.nome === 'Mufete'), cafe = st.artigos.find((a) => a.nome === 'Café');
+  const fs = require('fs');
+  for (const a of st.artigos) { assert.ok(a.imagem.startsWith('/img/'), a.nome + ' sem imagem'); assert.ok(fs.existsSync(__dirname + '/../public' + a.imagem), a.imagem); }
+  assert.equal(muf.imagem, '/img/mufete.png'); assert.equal(muf.favorito, false);
+  // artigo novo sem ilustração fica vazio (a app usa a genérica); favorito guarda-se
+  const cfg = await call('GET', 'cfg'); const am = cfg.artigos.find((a) => a.id === muf.id);
+  await call('POST', 'cfg', { entidade: 'artigos', linha: { ...am, favorito: true } });
+  const novo = await call('POST', 'cfg', { entidade: 'artigos', linha: { nome: 'Prato do dia', familia_id: am.familia_id, preco: 9000 } });
+  st = await call('GET', 'state'); assert.equal(st.artigos.find((a) => a.id === muf.id).favorito, true); assert.equal(st.artigos.find((a) => a.id === novo.id).imagem, '');
+  // fotografia: só o gestor carrega, qualquer pessoa vê; remover volta à ilustração
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  assert.equal((await raw('POST', 'foto', { artigo_id: muf.id, dados: 'data:text/html;base64,AAAA' })).status, 400);
+  const f = await call('POST', 'foto', { artigo_id: muf.id, dados: png }); assert.ok(f.imagem.startsWith('/api/foto?a=' + muf.id));
+  const tk = token; token = '';
+  const g = await raw('GET', 'foto', null, { a: muf.id }); assert.equal(g.status, 200); assert.equal(g.mime, 'image/png'); assert.ok(g.bin.length > 50);
+  assert.equal((await raw('POST', 'foto', { artigo_id: muf.id, dados: png })).status, 401);
+  const menu = await call('GET', 'menu', null, { l: 'principal' }); assert.equal(menu.familias.flatMap((x) => x.artigos).find((a) => a.id === muf.id).imagem, f.imagem);
+  token = tk; await call('POST', 'foto', { artigo_id: muf.id, remover: true });
+  st = await call('GET', 'state'); assert.equal(st.artigos.find((a) => a.id === muf.id).imagem, '/img/mufete.png'); assert.equal((await raw('GET', 'foto', null, { a: muf.id })).status, 404);
+  // taxa de serviço: só nas mesas, sobre o consumo, e pode ser dispensada
+  const ped = async (id) => (await call('GET', 'state')).pedidos.find((p) => p.id === id);
+  await call('POST', 'cfg', { entidade: 'empresa', linha: { ...st.empresa, taxa_servico: 10 } });
+  let r = await ops({ tipo: 'pedido.abrir', d: { id: 'm1', local_id: L, mesa_id: st.mesas[0].id } }, { tipo: 'linha.add', d: { id: 'a', pedido_id: 'm1', artigo_id: muf.id, qtd: 2 } }); assert.ok(r.every((x) => x.ok), JSON.stringify(r));
+  let p = await ped('m1'); assert.equal(p.linhas.find((l) => l.id === 'm1-srv').preco, 2900); assert.equal(p.total, 31900);
+  await ops({ tipo: 'linha.add', d: { id: 'b', pedido_id: 'm1', artigo_id: cafe.id, qtd: 1 } }); p = await ped('m1'); assert.equal(p.total, 30000 + 3000);
+  token = ''; await call('POST', 'pedido-publico', { l: 'principal', mesa: st.mesas[0].id, itens: [{ artigo_id: cafe.id, qtd: 1 }] }); token = tk;
+  p = await ped('m1'); assert.equal(p.total, 31000 + 3100);                                           // o pedido por QR também actualiza a taxa
+  await ops({ tipo: 'pedido.abrir', d: { id: 'b1', local_id: L, tipo: 'balcao' } }, { tipo: 'linha.add', d: { id: 'c', pedido_id: 'b1', artigo_id: muf.id, qtd: 1 } }); assert.equal((await ped('b1')).total, 14500);
+  await ops({ tipo: 'linha.anular', d: { id: 'm1-srv', motivo: 'oferta da casa' } }, { tipo: 'linha.add', d: { id: 'd', pedido_id: 'm1', artigo_id: cafe.id, qtd: 1 } }); assert.equal((await ped('m1')).total, 32000);
+  // entregas: nome obrigatório, taxa do bairro e embalagem entram sozinhas, estados
+  await call('POST', 'reg', { entidade: 'bairros', linha: { nome: 'Maianga', taxa: 1500 } });
+  st = await call('GET', 'state'); assert.deepEqual(st.bairros.map((b) => [b.nome, b.taxa]), [['Maianga', 1500]]);
+  r = await ops({ tipo: 'pedido.abrir', d: { id: 'e0', local_id: L, tipo: 'entrega' } }); assert.equal(r[0].ok, false);
+  r = await ops({ tipo: 'pedido.abrir', d: { id: 'e1', local_id: L, tipo: 'entrega', cliente_nome: 'Marta', cliente_tel: '923000111', bairro: 'Maianga', morada: 'Rua 1', taxa_entrega: 1500 } }, { tipo: 'linha.add', d: { id: 'e', pedido_id: 'e1', artigo_id: muf.id, qtd: 2 } }); assert.ok(r.every((x) => x.ok), JSON.stringify(r));
+  p = await ped('e1'); assert.equal(p.tipo, 'entrega'); assert.equal(p.mesa_nome, 'Entrega · Marta'); assert.equal(p.entrega_estado, 'preparar');
+  assert.equal(p.linhas.find((l) => l.id === 'e1-ent').nome, 'Taxa de entrega · Maianga'); assert.equal(p.linhas.find((l) => l.id === 'e1-emb').qtd, 2); assert.ok(!p.linhas.find((l) => l.id === 'e1-srv'));
+  assert.equal(p.total, 29000 + 1500 + 600);
+  r = await ops({ tipo: 'entrega.estado', d: { pedido_id: 'e1', estado: 'caminho', estafeta: 'João' } }, { tipo: 'entrega.estado', d: { pedido_id: 'e1', estado: 'voou' } }); assert.deepEqual(r.map((x) => x.ok), [true, false]);
+  p = await ped('e1'); assert.equal(p.entrega_estado, 'caminho'); assert.equal(p.estafeta, 'João');
+  await ops({ tipo: 'pedido.enviar', d: { pedido_id: 'e1' } }); p = await ped('e1'); assert.equal(p.linhas.filter((l) => l.estado === 'enviado').length, 1);          // só o prato vai para a cozinha
+  // dados fictícios trazem bairros e entregas
+  await call('POST', 'demo', { acao: 'carregar' }); st = await call('GET', 'state'); assert.ok(st.bairros.length >= 6); assert.equal(st.pedidos.filter((x) => x.id.startsWith('demo-en-')).length, 2);
+  await call('POST', 'demo', { acao: 'apagar' }); st = await call('GET', 'state'); assert.equal(st.bairros.length, 1);
+  console.log('OK — imagens, fotografia, taxa de serviço e entregas');
 })().catch((e) => { console.error(e); process.exit(1); });

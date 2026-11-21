@@ -105,3 +105,9 @@ body.tema-luxo {
 .tema-luxo .obs-op button { background: transparent; border: 1px solid var(--linha); color: #CFC3A8; box-shadow: none; border-radius: 2px; font-weight: 500; }
 .tema-luxo .obs-op button.on { background: var(--ouro); border-color: var(--ouro); color: #14110A; box-shadow: none; }
 .tema-luxo .tic button small i { color: var(--ouro-2); }
+
+/* v11 */
+.tema-luxo .art.ci img { border-radius: 2px 2px 0 0; background: #14110A; } .tema-luxo .art.ci { border-radius: 3px; }
+.tema-luxo .chip.fav { border-color: #C9A961; color: #E7D3A1; } .tema-luxo .chip.fav.on { color: #14110A; }
+.tema-luxo .tabs-m { background: rgba(11,10,8,.96); border-top: 1px solid #8C7335; } .tema-luxo .tabs-m a, .tema-luxo .tabs-m button { color: #A99C82; } .tema-luxo .tabs-m a.on { color: #E7D3A1; background: rgba(201,169,97,.12); }
+.tema-luxo .sv { border-left-color: #C9A961; } .tema-luxo img.mini, .tema-luxo .foto-f img, .tema-luxo .sv-l img { border-radius: 2px; background: #14110A; }

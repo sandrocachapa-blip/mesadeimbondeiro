@@ -41,11 +41,11 @@ async function api(path, o) {
 
 /* ---------- Sincronização ---------- */
 let aSincronizar = false;
-const VIVAS = ['mesas', 'pedido', 'cozinha', 'bar'];
+const VIVAS = ['mesas', 'pedido', 'cozinha', 'bar', 'servir', 'entregas'];
 async function sync() {
   if (!S.token || aSincronizar) return;
   aSincronizar = true;
-  const antes = JSON.stringify(S.st);
+  const antes = JSON.stringify(S.st), prA = prontosIds();
   try {
     while (S.queue.length) {
       const lote = S.queue.slice(0, 40);
@@ -63,6 +63,7 @@ async function sync() {
   } finally {
     aSincronizar = false;
     pintarEstado();
+    if (S.token && antes !== 'null' && pode('pedir') && S.user.perfil !== 'caixa') { const nv = prontosIds().filter((id) => !prA.includes(id)); if (nv.length) { const [pp] = linhaDe(nv[0]); apito(); try { navigator.vibrate && navigator.vibrate([250, 120, 250]); } catch (e) {} toast('Pronto a servir: ' + (pp ? pp.mesa_nome : '') + (nv.length > 1 ? ' (+' + (nv.length - 1) + ')' : '')); } }
     if (S.token && JSON.stringify(S.st) !== antes && (antes === 'null' || (VIVAS.includes(rota().v) && !S.x.editar && document.activeElement.id !== 'busca' && !$('#modal').classList.contains('on')))) render();
   }
 }
@@ -76,11 +77,18 @@ function pintarEstado() {
 /* ---------- Operações (aplicadas já no dispositivo, enviadas quando há rede) ---------- */
 const P = (id) => S.st.pedidos.find((p) => p.id === id);
 const linhaDe = (id) => { for (const p of S.st.pedidos) { const l = p.linhas.find((x) => x.id === id); if (l) return [p, l]; } return [null, null]; };
+const AUTO = ['embalagem', 'servico', 'entrega'];
 const recalc = (p) => {
-  const eid = p.id + '-emb', e = S.st.empresa || {}, emb = p.linhas.find((l) => l.id === eid); let n = 0;
-  if (p.tipo === 'takeaway' && e.emb_preco > 0) { const ls = p.linhas.filter((l) => l.id !== eid && l.estado !== 'anulado'); n = e.emb_modo === 'pedido' ? (ls.length ? 1 : 0) : ls.filter((l) => l.seccao === 'cozinha').reduce((s, l) => s + l.qtd, 0); }
-  if (!emb || emb.estado !== 'anulado') { if (n > 0) { if (emb) { emb.qtd = n; emb.preco = e.emb_preco; } else p.linhas.push({ id: eid, pedido_id: p.id, artigo_id: null, nome: 'Embalagem take-away', preco: e.emb_preco, qtd: n, notas: '', seccao: 'embalagem', estado: 'entregue', criado_em: new Date().toISOString() }); } else if (emb) p.linhas = p.linhas.filter((l) => l !== emb); }
-  p.total = Math.max(0, p.linhas.filter((l) => l.estado !== 'anulado').reduce((s, l) => s + l.preco * l.qtd, 0) - (p.desconto || 0)); };
+  const e = S.st.empresa || {}, base = p.linhas.filter((l) => !AUTO.includes(l.seccao) && l.estado !== 'anulado');
+  const soma = base.reduce((t, l) => t + l.preco * l.qtd, 0), pratos = base.filter((l) => l.seccao === 'cozinha').reduce((t, l) => t + l.qtd, 0), fora = p.tipo === 'takeaway' || p.tipo === 'entrega';
+  const auto = (suf, nome, sec, preco, n) => { const id = p.id + suf, x = p.linhas.find((l) => l.id === id); if (x && x.estado === 'anulado') return;
+    if (n > 0 && preco > 0) { if (x) { x.qtd = n; x.preco = preco; x.nome = nome; } else p.linhas.push({ id, pedido_id: p.id, artigo_id: null, nome, preco, qtd: n, notas: '', seccao: sec, estado: 'entregue', criado_em: new Date().toISOString() }); } else if (x) p.linhas = p.linhas.filter((l) => l !== x); };
+  auto('-emb', 'Embalagem take-away', 'embalagem', e.emb_preco || 0, fora ? (e.emb_modo === 'pedido' ? (base.length ? 1 : 0) : pratos) : 0);
+  auto('-ent', 'Taxa de entrega' + (p.bairro ? ' · ' + p.bairro : ''), 'entrega', p.taxa_entrega || 0, p.tipo === 'entrega' && base.length ? 1 : 0);
+  auto('-srv', 'Taxa de serviço (' + (e.taxa_servico || 0) + '%)', 'servico', Math.round(soma * (e.taxa_servico || 0) / 100), p.tipo === 'mesa' && base.length ? 1 : 0);
+  p.total = Math.max(0, p.linhas.filter((l) => l.estado !== 'anulado').reduce((t, l) => t + l.preco * l.qtd, 0) - (p.desconto || 0)); };
+const prontosIds = () => (S.st ? S.st.pedidos.flatMap((p) => p.linhas.filter((l) => l.estado === 'pronto' && !AUTO.includes(l.seccao)).map((l) => l.id)) : []);
+const imgArt = (a) => a.imagem || ((S.st.familias.find((f) => f.id === a.familia_id) || {}).seccao === 'bar' ? '/img/_bebida.png' : '/img/_prato.png');
 const pago = (p) => p.pagamentos.reduce((s, g) => s + g.valor, 0);
 function aplicar(o) {
   const d = o.d, st = S.st;
@@ -88,9 +96,11 @@ function aplicar(o) {
     case 'pedido.abrir': {
       const m = d.mesa_id && st.mesas.find((x) => x.id === d.mesa_id);
       if (m && st.pedidos.some((p) => p.mesa_id === m.id)) throw new Error(m.nome + ' já tem uma conta aberta');
-      st.pedidos.push({ id: d.id, mesa_id: d.mesa_id || null, mesa_nome: m ? m.nome : (d.tipo === 'takeaway' ? 'Take-away' : 'Balcão'), tipo: m ? 'mesa' : d.tipo, aberto_por_nome: S.user.nome, aberto_em: o.ts, cliente_nome: '', desconto: 0, total: 0, linhas: [], pagamentos: [] });
+      const ent = !m && d.tipo === 'entrega';
+      st.pedidos.push({ id: d.id, mesa_id: d.mesa_id || null, mesa_nome: m ? m.nome : ent ? 'Entrega · ' + d.cliente_nome : (d.tipo === 'takeaway' ? 'Take-away' : 'Balcão'), tipo: m ? 'mesa' : d.tipo, aberto_por_nome: S.user.nome, aberto_em: o.ts, cliente_nome: d.cliente_nome || '', cliente_tel: ent ? d.cliente_tel || '' : '', morada: ent ? d.morada || '' : '', bairro: ent ? d.bairro || '' : '', taxa_entrega: ent ? Number(d.taxa_entrega) || 0 : 0, estafeta: '', entrega_estado: ent ? 'preparar' : '', desconto: 0, total: 0, linhas: [], pagamentos: [] });
       break;
     }
+    case 'entrega.estado': { const p = P(d.pedido_id); if (p) { p.entrega_estado = d.estado; if (d.estafeta != null) p.estafeta = d.estafeta; } break; }
     case 'linha.add': {
       const p = P(d.pedido_id), a = st.artigos.find((x) => x.id === d.artigo_id); if (!p || !a) throw new Error('Artigo ou conta em falta');
       const f = st.familias.find((x) => x.id === a.familia_id);
@@ -101,7 +111,7 @@ function aplicar(o) {
     case 'pedido.enviar': { const p = P(d.pedido_id); if (p) p.linhas.forEach((l) => { if (l.estado === 'novo') { l.estado = 'enviado'; l.enviado_em = o.ts; } }); break; }
     case 'linha.estado': { const [, l] = linhaDe(d.id); if (l) l.estado = d.estado; break; }
     case 'pedido.desconto': { const p = P(d.pedido_id); if (p) { p.desconto = d.valor; recalc(p); } break; }
-    case 'pedido.transferir': { const p = P(d.pedido_id), m = st.mesas.find((x) => x.id === d.mesa_id); if (p && m) { if (st.pedidos.some((x) => x.mesa_id === m.id && x !== p)) throw new Error(m.nome + ' já tem uma conta aberta'); p.mesa_id = m.id; p.mesa_nome = m.nome; p.tipo = 'mesa'; } break; }
+    case 'pedido.transferir': { const p = P(d.pedido_id), m = st.mesas.find((x) => x.id === d.mesa_id); if (p && m) { if (st.pedidos.some((x) => x.mesa_id === m.id && x !== p)) throw new Error(m.nome + ' já tem uma conta aberta'); p.mesa_id = m.id; p.mesa_nome = m.nome; p.tipo = 'mesa'; recalc(p); } break; }
     case 'pagamento.add': { const p = P(d.pedido_id); if (!st.turno) throw new Error('Abra a caixa antes de receber pagamentos'); if (p) p.pagamentos.push({ id: d.id, pedido_id: p.id, meio: d.meio, valor: d.valor }); break; }
     case 'pagamento.remover': { st.pedidos.forEach((p) => { p.pagamentos = p.pagamentos.filter((g) => g.id !== d.id); }); break; }
     case 'pedido.fechar': { const p = P(d.pedido_id); if (p) { if (pago(p) + 0.005 < p.total) throw new Error('Falta receber ' + kz(p.total - pago(p))); st.pedidos = st.pedidos.filter((x) => x !== p); } break; }
@@ -141,7 +151,7 @@ function menus() {
   const p = S.user.perfil;
   if (p === 'cozinha') return [{ g: 'Operação', i: [['cozinha', 'Cozinha'], ['equipa', 'Ponto']] }];
   if (p === 'bar') return [{ g: 'Operação', i: [['bar', 'Bar'], ['equipa', 'Ponto']] }];
-  const op = [['mesas', 'Mesas'], ['cozinha', 'Cozinha'], ['bar', 'Bar'], ['reservas', 'Reservas']];
+  const op = [['mesas', 'Mesas'], ['servir', 'Prontos a servir'], ['cozinha', 'Cozinha'], ['bar', 'Bar'], ['entregas', 'Entregas'], ['reservas', 'Reservas']];
   if (pode('pagar')) op.push(['caixa', 'Caixa'], ['facturacao', 'Facturação']);
   op.push(['clientes', 'Clientes']);
   const g = [{ g: 'Operação', i: op }];
@@ -152,6 +162,7 @@ function menus() {
   return g;
 }
 const VIEWS = {};
+const TABI = {"mesas": "<svg viewBox=\"0 0 24 24\"><rect x=\"4\" y=\"5\" width=\"16\" height=\"4\" rx=\"1.5\"/><path d=\"M7 9v10M17 9v10\"/></svg>", "servir": "<svg viewBox=\"0 0 24 24\"><path d=\"M3 18h18M5 18a7 7 0 0 1 14 0M12 8V6\"/></svg>", "entregas": "<svg viewBox=\"0 0 24 24\"><path d=\"M3 7h11v9H3zM14 10h4l3 3v3h-7z\"/><circle cx=\"7\" cy=\"18\" r=\"2\"/><circle cx=\"17\" cy=\"18\" r=\"2\"/></svg>", "mais": "<svg viewBox=\"0 0 24 24\"><path d=\"M4 7h16M4 12h16M4 17h16\"/></svg>"};
 function sair(silencioso) { S.token = ''; S.user = null; ls.del('token'); ls.del('user'); if (!silencioso) { S.st = null; ls.del('state'); } render(); }
 
 function render() {
@@ -171,7 +182,9 @@ function render() {
     <nav>${gs.map((g, k) => { const tem = g.i.some((m) => m[0] === on), ab = (S.x.grpAb || {})[k] != null ? S.x.grpAb[k] : (tem || gs.length === 1);
       return `<div class="grp ${ab ? 'ab' : ''} ${tem ? 'act' : ''}"><button class="gh" data-a="grp" data-g="${k}" data-ab="${ab ? 1 : 0}"><span>${g.g}</span><i>▾</i></button><div class="sub">${g.i.map((m) => `<a href="#${m[0]}" class="${m[0] === on ? 'on' : ''}">${m[1]}</a>`).join('')}</div></div>`; }).join('')}</nav></aside>
     <div class="vela" data-a="ham"></div>
-    <div class="corpo"><header class="topo"><button class="ham" data-a="ham" aria-label="Menu">☰</button><b class="tit">${esc((todos.find((m) => m[0] === on) || ['', ''])[1])}</b><span class="esp"></span><span id="estado" class="pill"></span><button class="eu" data-a="eu">${esc(S.user.nome.split(' ')[0])} ▾</button></header><main>${corpo}</main></div>`;
+    <div class="corpo"><header class="topo"><button class="ham" data-a="ham" aria-label="Menu">☰</button><b class="tit">${esc((todos.find((m) => m[0] === on) || ['', ''])[1])}</b><span class="esp"></span><span id="estado" class="pill"></span><button class="eu" data-a="eu">${esc(S.user.nome.split(' ')[0])} ▾</button></header><main>${corpo}</main></div>
+    ${pode('pedir') && r.v !== 'pedido' ? `<nav class="tabs-m">${[['mesas', 'Mesas'], ['servir', 'Prontos'], ['entregas', 'Entregas']].map((t) => `<a href="#${t[0]}" class="${on === t[0] ? 'on' : ''}">${TABI[t[0]]}<span>${t[1]}</span>${t[0] === 'servir' && prontosIds().length ? `<i>${prontosIds().length}</i>` : ''}</a>`).join('')}<button data-a="ham">${TABI.mais}<span>Mais</span></button></nav>` : ''}`;
+  document.body.classList.toggle('com-tabs', pode('pedir') && r.v !== 'pedido');
   if (sc) $('.lado nav').scrollTop = sc;
   pintarEstado();
 }
@@ -231,7 +244,7 @@ function vMesas() {
     ${!st.turno && pode('pagar') ? '<div class="aviso">A caixa está fechada. Pode registar pedidos, mas para receber pagamentos abra a caixa no menu <a href="#caixa">Caixa</a>.</div>' : ''}
     ${ed ? `<div class="aviso ferr"><div><b>Mover:</b> arraste cada mesa para o sítio. <b>Juntar:</b> toque nas mesas a juntar (a primeira fica com o número activo) e escolha «Juntar». As outras deixam de aparecer e a conta passa a ser uma só.</div>
       <div class="fila" style="margin-top:10px"><button class="btn p" data-a="juntarMesas" ${nSel >= 2 ? '' : 'disabled'}>Juntar${nSel >= 2 ? ' ' + nSel + ' mesas' : ''}</button><button class="btn" data-a="separarMesas" ${nSel ? '' : 'disabled'}>Separar</button><button class="btn" data-a="novaMesa">Adicionar mesa</button><button class="btn" data-a="formaMesas" ${nSel ? '' : 'disabled'}>Mudar forma</button><span class="esp"></span><button class="btn p" data-a="guardarPlanta">Guardar posições</button><button class="btn" data-a="editarPlanta">Fechar</button></div></div>` : ''}
-    ${soltas.length ? `<h3 class="zona">Balcão e take-away</h3><div class="grelha">${soltas.map((p) => `<button class="mesa oc ${corMesa(p).cls}" data-a="abrir" data-id="${p.id}"><b>${esc(p.mesa_nome)}</b><span class="mudo">${esc(p.aberto_por_nome)} · ${hora(p.aberto_em)}</span>${esperaTxt(corMesa(p))}<span class="tot">${kz(p.total)}</span></button>`).join('')}</div>` : ''}
+    ${soltas.length ? `<h3 class="zona">Balcão, take-away e entregas</h3><div class="grelha">${soltas.map((p) => `<button class="mesa oc ${corMesa(p).cls}" data-a="abrir" data-id="${p.id}"><b>${esc(p.mesa_nome)}</b><span class="mudo">${esc(p.aberto_por_nome)} · ${hora(p.aberto_em)}</span>${esperaTxt(corMesa(p))}<span class="tot">${kz(p.total)}</span></button>`).join('')}</div>` : ''}
     <div class="legenda"><span><i class="l0"></i>Livre</span><span><i class="l4"></i>Reservada hoje</span><span><i class="l1"></i>Ocupada, pedido em dia</span><span><i class="l2"></i>À espera há 10 min ou mais</span><span><i class="l3"></i>À espera há 30 min ou mais</span><span class="mudo">A espera pára quando a cozinha ou o bar dão o pedido como pronto.</span></div>
     ${modo === 'planta' ? `<div class="chips" style="margin-top:12px">${zonas.map((z) => `<button class="chip ${z === S.x.zona ? 'on' : ''}" data-a="zona" data-id="${esc(z)}">${esc(z)}</button>`).join('')}</div>
       ${ed ? '' : `<div class="zoom"><span class="mudo">Distância da planta</span><button class="btn s" data-a="zoomPlanta" data-d="-1" title="Afastar">−</button><button class="btn s" data-a="zoomPlanta" data-d="1" title="Aproximar">+</button></div>`}
@@ -243,19 +256,21 @@ function vPedido(id) {
   const st = S.st, p = P(id);
   if (!p) return `<div class="aviso">Esta conta já foi fechada.</div><a class="btn" href="#mesas">Voltar às mesas</a>`;
   const daCarta = st.familias.filter((f) => (f.carta === 'vinhos') === (S.x.carta === 'vinhos'));
-  if (!S.fam || !daCarta.some((f) => f.id === S.fam)) S.fam = (daCarta[0] || st.familias[0] || {}).id;
+  const temFav = st.artigos.some((a) => a.favorito);
+  if ((S.fam === 'fav' && !temFav) || (S.fam !== 'fav' && (!S.fam || !daCarta.some((f) => f.id === S.fam)))) S.fam = temFav && !S.fam ? 'fav' : (daCarta[0] || st.familias[0] || {}).id;
   const novos = p.linhas.filter((l) => l.estado === 'novo').length, pg = pago(p), bruto = p.total + (p.desconto || 0), itens = p.linhas.filter((l) => l.estado !== 'anulado').reduce((s, l) => s + l.qtd, 0);
   return `<div class="cab"><a class="btn s" href="#mesas">← Mesas</a><h1>${esc(p.mesa_nome)}</h1><span class="mudo">aberta por ${esc(p.aberto_por_nome)} às ${hora(p.aberto_em)}</span></div>
+  ${p.tipo === 'entrega' ? `<div class="aviso ferr" style="margin-bottom:10px"><b>Entrega ao domicílio</b> · ${esc(p.cliente_nome)}${p.cliente_tel ? ' · <a href="tel:' + esc(p.cliente_tel) + '">' + esc(p.cliente_tel) + '</a>' : ''}<br>${esc([p.bairro, p.morada].filter(Boolean).join(' · ')) || 'sem morada'}${p.estafeta ? ' · estafeta: ' + esc(p.estafeta) : ''} · <a href="#entregas">ver quadro de entregas</a></div>` : ''}
   <div class="pedido ${S.x.verConta ? 'vc' : ''}"><div class="carta">
-    <div class="fila" style="margin-bottom:8px;flex-wrap:nowrap"><input id="busca" type="search" placeholder="Procurar artigo…" value="${esc(S.x.busca || '')}" autocomplete="off"><button class="btn s" data-a="disp" style="white-space:nowrap">Indisponíveis${st.artigos.some((a) => a.fora) ? ' (' + st.artigos.filter((a) => a.fora).length + ')' : ''}</button></div>
+    <div class="fila" style="margin-bottom:8px;flex-wrap:nowrap"><input id="busca" type="search" placeholder="Procurar artigo…" value="${esc(S.x.busca || '')}" autocomplete="off"><button class="btn s" data-a="disp" style="white-space:nowrap">Indisponíveis${st.artigos.some((a) => a.fora) ? ' (' + st.artigos.filter((a) => a.fora).length + ')' : ''}</button><button class="btn s" data-a="semImg" style="white-space:nowrap" title="Mostrar ou esconder as imagens">${ls.get('semImg', false) ? 'Com imagens' : 'Só texto'}</button></div>
     <div class="seg" style="margin-bottom:8px"><button class="${S.x.carta !== 'vinhos' ? 'on' : ''}" data-a="carta" data-c="menu">Menu</button><button class="${S.x.carta === 'vinhos' ? 'on' : ''}" data-a="carta" data-c="vinhos">Vinhos e bebidas alcoólicas</button></div>
-    <div class="chips">${st.familias.filter((f) => (f.carta === 'vinhos') === (S.x.carta === 'vinhos')).map((f) => `<button class="chip ${f.id === S.fam ? 'on' : ''}" data-a="fam" data-id="${f.id}">${esc(f.nome)}</button>`).join('')}</div>
+    <div class="chips">${temFav ? `<button class="chip fav ${S.fam === 'fav' ? 'on' : ''}" data-a="fam" data-id="fav">★ Favoritos</button>` : ''}${st.familias.filter((f) => (f.carta === 'vinhos') === (S.x.carta === 'vinhos')).map((f) => `<button class="chip ${f.id === S.fam ? 'on' : ''}" data-a="fam" data-id="${f.id}">${esc(f.nome)}</button>`).join('')}</div>
     <div class="arts" id="arts">${artsHtml(p)}</div>
   </div>
   <div class="cartao conta">
     ${p.linhas.length ? p.linhas.map((l) => `<div class="lin ${l.estado}">
       ${l.estado === 'novo' ? `<div class="qt"><button data-a="menos" data-id="${l.id}">−</button><b>${l.qtd}</b><button data-a="mais" data-id="${l.id}">+</button></div>` : `<b>${l.qtd}×</b>`}
-      <div class="n">${esc(l.nome)}<small>${l.seccao === 'embalagem' && l.estado !== 'anulado' ? '<span class="est">juntada automaticamente</span>' : `<span class="est ${l.estado}">${ESTADOS[l.estado]}</span>`}${l.criado_por_nome === 'Cliente (QR)' && l.estado === 'novo' ? ' pedido pelo cliente' : ''}</small>${l.notas ? `<span class="obs-t">Obs.: ${esc(l.notas)}</span>` : ''}${l.estado === 'novo' ? `<button class="obs-b" data-a="nota" data-id="${l.id}">${l.notas ? 'Alterar obs.' : '+ Obs. (bem passado, sem batata…)'}</button>` : ''}</div>
+      <div class="n">${esc(l.nome)}<small>${AUTO.includes(l.seccao) && l.estado !== 'anulado' ? '<span class="est">juntada automaticamente</span>' : `<span class="est ${l.estado}">${ESTADOS[l.estado]}</span>`}${l.criado_por_nome === 'Cliente (QR)' && l.estado === 'novo' ? ' pedido pelo cliente' : ''}</small>${l.notas ? `<span class="obs-t">Obs.: ${esc(l.notas)}</span>` : ''}${l.estado === 'novo' ? `<button class="obs-b" data-a="nota" data-id="${l.id}">${l.notas ? 'Alterar obs.' : '+ Obs. (bem passado, sem batata…)'}</button>` : ''}</div>
       <span class="v">${kz(l.preco * l.qtd)}</span>
       ${l.estado === 'novo' ? '' : (l.estado !== 'anulado' && pode('aprovar') ? `<button class="btn s perigo" data-a="anularL" data-id="${l.id}">Anular</button>` : '')}
     </div>`).join('') : '<p class="mudo">Toque nos artigos para os juntar à conta.</p>'}
@@ -278,8 +293,8 @@ function vPedido(id) {
 }
 function artsHtml(p) {
   const b = (S.x.busca || '').trim().toLowerCase(), qt = (id) => p.linhas.filter((l) => l.artigo_id === id && l.estado === 'novo').reduce((s, l) => s + l.qtd, 0);
-  const arts = S.st.artigos.filter((a) => (b ? a.nome.toLowerCase().includes(b) : a.familia_id === S.fam));
-  return arts.map((a) => { const n = qt(a.id); return `<button class="art ${n ? 'tem' : ''} ${a.fora ? 'fora' : ''}" data-a="add" data-id="${a.id}">${n ? `<i>${n}</i>` : ''}<b>${esc(a.nome)}</b><span>${a.fora ? 'indisponível' : kz(a.preco)}</span></button>`; }).join('') || '<p class="mudo">Sem artigos.</p>';
+  const arts = S.st.artigos.filter((a) => (b ? a.nome.toLowerCase().includes(b) : (S.fam === 'fav' ? a.favorito : a.familia_id === S.fam))), img = !ls.get('semImg', false);
+  return arts.map((a) => { const n = qt(a.id); return `<button class="art ${img ? 'ci' : ''} ${n ? 'tem' : ''} ${a.fora ? 'fora' : ''}" data-a="add" data-id="${a.id}">${n ? `<i>${n}</i>` : ''}${img ? `<img src="${esc(imgArt(a))}" alt="" loading="lazy">` : ''}<b>${esc(a.nome)}</b><span>${a.fora ? 'indisponível' : kz(a.preco)}</span></button>`; }).join('') || '<p class="mudo">Sem artigos.</p>';
 }
 
 function mReceber(id) {
@@ -326,6 +341,22 @@ function mDisp() {
     <div class="fila" style="margin-top:16px">${n ? `<button class="btn" data-a="dispTodos">Repor todos (${n})</button>` : ''}<span class="esp"></span><button class="btn p" data-a="fechar">Concluído</button></div>`, 'larga');
 }
 function apito() { try { const C = window.AudioContext || window.webkitAudioContext, c = apito.c || (apito.c = new C()); [0, 0.22].forEach((t) => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 880; o.connect(g); g.connect(c.destination); g.gain.setValueAtTime(0.25, c.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + t + 0.18); o.start(c.currentTime + t); o.stop(c.currentTime + t + 0.2); }); } catch (e) {} }
+/* Empregado de mesa: o que já saiu da cozinha ou do bar e está à espera de ir para a mesa */
+function vServir() {
+  const de = (ests) => S.st.pedidos.map((p) => ({ p, ls: p.linhas.filter((l) => ests.includes(l.estado) && !AUTO.includes(l.seccao)) })).filter((t) => t.ls.length);
+  const pr = de(['pronto']), fila = de(['enviado', 'preparar']);
+  return `<div class="cab"><h1>Prontos a servir</h1><span class="mudo">${pr.reduce((s, t) => s + t.ls.length, 0)} artigo(s) à espera de ir para a mesa</span></div>
+    ${pr.length ? `<div class="servir">${pr.map(({ p, ls }) => `<div class="cartao sv"><header><b>${esc(p.mesa_nome)}</b><span class="mudo">${esc((p.aberto_por_nome || '').split(' ')[0])}</span></header>
+      ${ls.map((l) => { const a = S.st.artigos.find((x) => x.id === l.artigo_id); return `<div class="sv-l">${a ? `<img src="${esc(imgArt(a))}" alt="" loading="lazy">` : ''}<div><b>${l.qtd}× ${esc(l.nome)}</b><small>${l.seccao === 'bar' ? 'Levantar no bar' : 'Levantar na cozinha'}${l.notas ? ' · ' + esc(l.notas) : ''}</small></div><button class="btn s" data-a="kds" data-id="${l.id}" data-e="pronto">Entregue</button></div>`; }).join('')}
+      <div class="fila" style="margin-top:10px"><a class="btn s" href="#pedido/${p.id}">Abrir conta</a><span class="esp"></span><button class="btn p" data-a="servirTodos" data-p="${p.id}">Entreguei tudo</button></div></div>`).join('')}</div>`
+    : '<div class="cartao">Nada à espera. Quando a cozinha ou o bar validarem uma saída, aparece aqui e o telemóvel toca.</div>'}
+    <h3 class="zona">Ainda em preparação</h3>${fila.length ? `<div class="cartao">${fila.map(({ p, ls }) => `<div class="tot-l"><span><b>${esc(p.mesa_nome)}</b> · ${ls.map((l) => l.qtd + '× ' + esc(l.nome)).join(', ')}</span><span class="mudo">${mins(ls[0].enviado_em || ls[0].criado_em)} min</span></div>`).join('')}</div>` : '<p class="mudo">Sem pedidos em preparação.</p>'}`;
+}
+function reduzFoto(file) {
+  return new Promise((ok, erro) => { const im = new Image(); im.onload = () => { const W = 800, H = 600, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const e = Math.max(W / im.width, H / im.height), w = im.width * e, h = im.height * e; c.getContext('2d').drawImage(im, (W - w) / 2, (H - h) / 2, w, h); URL.revokeObjectURL(im.src); ok(c.toDataURL('image/jpeg', 0.8)); };
+    im.onerror = () => erro(new Error('Não foi possível ler a fotografia')); im.src = URL.createObjectURL(file); });
+}
 function vKds(sec) {
   const de = (ests) => S.st.pedidos.map((p) => ({ p, ls: p.linhas.filter((l) => l.seccao === sec && ests.includes(l.estado)) })).filter((t) => t.ls.length)
     .sort((a, b) => new Date(a.ls[0].enviado_em || a.ls[0].criado_em) - new Date(b.ls[0].enviado_em || b.ls[0].criado_em));
@@ -399,7 +430,7 @@ function vRel() {
 function vMenu() {
   const qr = (u, n, sub) => `<div class="cartao qr"><h2>${esc(n)}</h2>${sub ? `<p class="mudo">${sub}</p>` : ''}<p><img src="/api/qr?t=${encodeURIComponent(u)}" alt="Código QR" loading="lazy"></p><div class="fila" style="justify-content:center"><a class="btn s" href="${esc(u)}" target="_blank" rel="noopener">Abrir</a><button class="btn s p" data-a="impQr" data-u="${esc(u)}" data-n="${esc(n)}">Imprimir QR</button></div></div>`;
   const base = location.origin + '/menu?l=' + encodeURIComponent(S.st.local.slug);
-  return `<div class="cab"><h1>Menu digital</h1><span class="esp"></span><button class="btn p" data-a="disp">Retirar produtos temporariamente${S.st.artigos.some((a) => a.fora) ? ' (' + S.st.artigos.filter((a) => a.fora).length + ' fora)' : ''}</button></div><div class="aviso">O QR do local mostra só a carta. O QR de cada mesa deixa o cliente pedir: o pedido entra na conta dessa mesa como «pedido do cliente» e só segue para a cozinha depois de o empregado o confirmar com «Enviar pedido».</div>
+  return `<div class="cab"><h1>Menu digital</h1><span class="esp"></span><a class="btn" href="/menu?l=${encodeURIComponent(S.st.local.slug)}&imprimir=1" target="_blank" rel="noopener">Versão para imprimir</a><button class="btn p" data-a="disp">Retirar produtos temporariamente${S.st.artigos.some((a) => a.fora) ? ' (' + S.st.artigos.filter((a) => a.fora).length + ' fora)' : ''}</button></div><div class="aviso">O QR do local mostra só a carta. O QR de cada mesa deixa o cliente pedir: o pedido entra na conta dessa mesa como «pedido do cliente» e só segue para a cozinha depois de o empregado o confirmar com «Enviar pedido».</div>
     <h3 class="zona">Carta de ${esc(S.st.local.nome)}</h3><div class="fases">${qr(base, S.st.local.nome, 'Menu · só consulta')}${qr(base + '#vinhos', 'Carta de vinhos e bar', 'Vinhos e bebidas alcoólicas · só consulta')}</div>
     <h3 class="zona">Reservas online</h3><div class="fases">${qr(base + '#reservar', 'Reservar em ' + S.st.local.nome, 'O cliente pede a reserva; fica «por confirmar» em Reservas')}</div>
     <h3 class="zona">Pedido na mesa</h3><div class="fases">${S.st.mesas.map((m) => qr(base + '&m=' + m.id, m.nome, esc(m.zona))).join('')}</div>`;
@@ -415,12 +446,12 @@ function vCfg() {
   const pl = (aid) => (d.precos.find((p) => p.artigo_id === aid && p.local_id === S.local) || {}).preco;
   let corpo = '';
   const T = (cols, rows) => `<table><tr>${cols.map((x) => `<th>${x}</th>`).join('')}</tr>${rows.map((r) => `<tr class="clic" data-a="cfgEdit" data-id="${r[0]}">${r.slice(1).map((x) => `<td>${x}</td>`).join('')}</tr>`).join('')}</table>`;
-  if (tab === 'artigos') corpo = T(['Artigo', 'Família', 'Preço base', 'Preço em ' + esc(S.st.local.nome), 'Activo', 'No menu digital'], d.artigos.map((a) => [a.id, esc(a.nome), esc(fam(a.familia_id)), kz(a.preco), pl(a.id) != null ? kz(pl(a.id)) : '<span class="mudo">igual ao base</span>', sn(a.activo), sn(a.no_menu)]));
+  if (tab === 'artigos') corpo = T(['', 'Artigo', 'Família', 'Preço base', 'Preço em ' + esc(S.st.local.nome), 'Activo', 'No menu digital'], d.artigos.map((a) => [a.id, `<img class="mini" src="${esc(a.imagem || '/img/_prato.png')}" alt="" loading="lazy">`, esc(a.nome) + (a.favorito ? ' <span class="est ok">★ favorito</span>' : ''), esc(fam(a.familia_id)), kz(a.preco), pl(a.id) != null ? kz(pl(a.id)) : '<span class="mudo">igual ao base</span>', sn(a.activo), sn(a.no_menu)]));
   if (tab === 'familias') corpo = T(['Família', 'Carta', 'Preparada em', 'Ordem', 'Activa'], d.familias.map((f) => [f.id, esc(f.nome), f.carta === 'vinhos' ? 'Vinhos e bebidas alcoólicas' : 'Menu', f.seccao === 'bar' ? 'Bar' : 'Cozinha', f.ordem, sn(f.activo)]));
   if (tab === 'mesas') corpo = T(['Mesa', 'Zona', 'Local', 'Lugares', 'Activa'], d.mesas.map((m) => [m.id, esc(m.nome), esc(m.zona), esc(loc(m.local_id)), m.lugares, sn(m.activo)]));
   if (tab === 'locais') corpo = T(['Local', 'Tipo', 'Morada', 'Endereço do menu', 'Activo'], d.locais.map((l) => [l.id, esc(l.nome), esc(l.tipo), esc(l.morada), '/menu?l=' + esc(l.slug), sn(l.activo)]));
   if (tab === 'utilizadores') corpo = T(['Nome', 'Utilizador', 'Perfil', 'Local', 'Activo'], d.utilizadores.map((u) => [u.id, esc(u.nome), esc(u.login), PERFIS[u.perfil] || u.perfil, esc(loc(u.local_id)), sn(u.activo)]));
-  if (tab === 'empresa') { const e = d.empresa; corpo = `<table><tr><td>Nome</td><td>${esc(e.nome)}</td></tr><tr><td>NIF</td><td>${esc(e.nif) || '—'}</td></tr><tr><td>Regime de IVA</td><td>${esc(e.regime_iva)}</td></tr><tr><td>Taxa de IVA incluída nos preços</td><td>${e.taxa_iva}%</td></tr><tr><td>Software de facturação certificado</td><td>${esc(e.factura_software) || 'por definir'}</td></tr><tr><td>Embalagem de take-away</td><td>${e.emb_preco > 0 ? kz(e.emb_preco) + (e.emb_modo === 'pedido' ? ' por pedido' : ' por prato') : 'não é cobrada'}</td></tr><tr><td>Aspecto</td><td>${e.tema === 'luxo' ? 'Luxo — preto e dourado' : 'Clássico — terracota e creme'}</td></tr></table>
+  if (tab === 'empresa') { const e = d.empresa; corpo = `<table><tr><td>Nome</td><td>${esc(e.nome)}</td></tr><tr><td>NIF</td><td>${esc(e.nif) || '—'}</td></tr><tr><td>Regime de IVA</td><td>${esc(e.regime_iva)}</td></tr><tr><td>Taxa de IVA incluída nos preços</td><td>${e.taxa_iva}%</td></tr><tr><td>Software de facturação certificado</td><td>${esc(e.factura_software) || 'por definir'}</td></tr><tr><td>Embalagem de take-away</td><td>${e.emb_preco > 0 ? kz(e.emb_preco) + (e.emb_modo === 'pedido' ? ' por pedido' : ' por prato') : 'não é cobrada'}</td></tr><tr><td>Taxa de serviço nas mesas</td><td>${e.taxa_servico > 0 ? e.taxa_servico + '% sobre o consumo' : 'não é cobrada'}</td></tr><tr><td>Aspecto</td><td>${e.tema === 'luxo' ? 'Luxo — preto e dourado' : 'Clássico — terracota e creme'}</td></tr></table>
     <div class="aviso" style="margin:16px 0 0"><b>Dados fictícios de demonstração.</b> Preenchem todos os menus com vendas, stock, compras, equipa, salários, finanças, reservas e um segundo local de exemplo. Podem ser apagados de uma vez, sem tocar nos dados reais.<div class="fila" style="margin-top:10px"><button class="btn" data-a="demo" data-ac="carregar">Carregar dados fictícios</button><button class="btn perigo" data-a="demo" data-ac="apagar">Apagar dados fictícios</button></div></div>`; }
   return `<div class="cab"><h1>Configuração</h1><span class="esp"></span><button class="btn p" data-a="cfgEdit" data-id="">${tab === 'empresa' ? 'Editar dados da empresa' : 'Novo registo'}</button></div>
     <div class="tabs">${tabs.map((t) => `<button class="chip ${t[0] === tab ? 'on' : ''}" data-a="cfgTab" data-id="${t[0]}">${t[1]}</button>`).join('')}</div><div class="cartao" style="overflow:auto">${corpo}</div>`;
@@ -430,19 +461,22 @@ function cfgForm(id) {
   const optLoc = d.locais.map((l) => [l.id, l.nome]);
   const campos = {
     artigos: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'familia_id', label: 'Família', type: 'select', options: d.familias.map((f) => [f.id, f.nome]) }, { k: 'descricao', label: 'Descrição (aparece no menu digital)' }, { k: 'preco', label: 'Preço base (Kz)', type: 'number', req: 1 },
-      { k: 'preco_local', label: 'Preço só em ' + S.st.local.nome + ' (vazio = igual ao base)', type: 'number', value: (d.precos.find((p) => p.artigo_id === r.id && p.local_id === S.local) || {}).preco }, { k: 'no_menu', label: 'Mostrar no menu digital', type: 'check', value: novo ? true : r.no_menu }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
+      { k: 'preco_local', label: 'Preço só em ' + S.st.local.nome + ' (vazio = igual ao base)', type: 'number', value: (d.precos.find((p) => p.artigo_id === r.id && p.local_id === S.local) || {}).preco }, { k: 'no_menu', label: 'Mostrar no menu digital', type: 'check', value: novo ? true : r.no_menu }, { k: 'favorito', label: 'Favorito — aparece primeiro no ponto de venda', type: 'check', value: !!r.favorito }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
     familias: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'carta', label: 'Aparece em', type: 'select', options: [['menu', 'Menu (comida e bebidas sem álcool)'], ['vinhos', 'Carta de vinhos e bebidas alcoólicas']] }, { k: 'seccao', label: 'Preparada em', type: 'select', options: [['cozinha', 'Cozinha'], ['bar', 'Bar']] }, { k: 'ordem', label: 'Ordem na carta', type: 'number' }, { k: 'activo', label: 'Activa', type: 'check', value: novo ? true : r.activo }],
     mesas: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'zona', label: 'Zona', value: r.zona || 'Sala' }, { k: 'local_id', label: 'Local', type: 'select', options: optLoc, value: r.local_id || S.local }, { k: 'lugares', label: 'Lugares', type: 'number', value: r.lugares || 4 }, { k: 'ordem', label: 'Ordem', type: 'number' }, { k: 'activo', label: 'Activa', type: 'check', value: novo ? true : r.activo }],
     locais: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'tipo', label: 'Tipo', type: 'select', options: [['restaurante', 'Restaurante'], ['bar', 'Bar'], ['esplanada', 'Esplanada'], ['takeaway', 'Take-away']] }, { k: 'morada', label: 'Morada' }, { k: 'slug', label: 'Endereço do menu (sem espaços)', ph: 'ex.: ilha-de-luanda' }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
     utilizadores: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'login', label: 'Nome de utilizador', req: 1 }, { k: 'perfil', label: 'Perfil', type: 'select', options: Object.entries(PERFIS) }, { k: 'local_id', label: 'Local', type: 'select', options: [['', 'Todos os locais']].concat(optLoc) }, { k: 'password', label: novo ? 'Palavra-passe (mín. 6 caracteres)' : 'Nova palavra-passe (vazio = manter)', type: 'password' }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
-    empresa: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'nif', label: 'NIF' }, { k: 'regime_iva', label: 'Regime de IVA', type: 'select', options: [['geral', 'Geral'], ['simplificado', 'Simplificado'], ['exclusao', 'Exclusão']] }, { k: 'taxa_iva', label: 'Taxa de IVA incluída nos preços (%) — confirme com o contabilista', type: 'number' }, { k: 'factura_software', label: 'Software de facturação certificado a ligar', ph: 'ex.: Primavera' }, { k: 'inss_taxa', label: 'Segurança Social a cargo do trabalhador (%) — confirme com o contabilista', type: 'number' }, { k: 'emb_preco', label: 'Preço da embalagem de take-away (Kz) — 0 para não cobrar', type: 'number' }, { k: 'emb_modo', label: 'Cobrar a embalagem', type: 'select', options: [['prato', 'Por cada prato da cozinha'], ['pedido', 'Uma vez por pedido']] }, { k: 'obs_cozinha', label: 'Observações rápidas da cozinha, separadas por vírgulas (vazio = lista padrão)', ph: 'Bem passado, Sem batata, Só arroz…' }, { k: 'obs_bar', label: 'Observações rápidas do bar, separadas por vírgulas (vazio = lista padrão)', ph: 'Sem gelo, Com limão…' }, { k: 'tema', label: 'Aspecto da app e do menu digital', type: 'select', options: [['classico', 'Clássico — terracota e creme'], ['luxo', 'Luxo — preto e dourado, para restaurantes de alto nível']] }],
+    empresa: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'nif', label: 'NIF' }, { k: 'regime_iva', label: 'Regime de IVA', type: 'select', options: [['geral', 'Geral'], ['simplificado', 'Simplificado'], ['exclusao', 'Exclusão']] }, { k: 'taxa_iva', label: 'Taxa de IVA incluída nos preços (%) — confirme com o contabilista', type: 'number' }, { k: 'factura_software', label: 'Software de facturação certificado a ligar', ph: 'ex.: Primavera' }, { k: 'inss_taxa', label: 'Segurança Social a cargo do trabalhador (%) — confirme com o contabilista', type: 'number' }, { k: 'emb_preco', label: 'Preço da embalagem de take-away (Kz) — 0 para não cobrar', type: 'number' }, { k: 'emb_modo', label: 'Cobrar a embalagem', type: 'select', options: [['prato', 'Por cada prato da cozinha'], ['pedido', 'Uma vez por pedido']] }, { k: 'taxa_servico', label: 'Taxa de serviço nas contas de mesa (%) — 0 para não cobrar', type: 'number' }, { k: 'obs_cozinha', label: 'Observações rápidas da cozinha, separadas por vírgulas (vazio = lista padrão)', ph: 'Bem passado, Sem batata, Só arroz…' }, { k: 'obs_bar', label: 'Observações rápidas do bar, separadas por vírgulas (vazio = lista padrão)', ph: 'Sem gelo, Com limão…' }, { k: 'tema', label: 'Aspecto da app e do menu digital', type: 'select', options: [['classico', 'Clássico — terracota e creme'], ['luxo', 'Luxo — preto e dourado, para restaurantes de alto nível']] }],
   }[tab].map((c) => (c.value === undefined ? Object.assign(c, { value: r[c.k] }) : c));
   form((novo && tab !== 'empresa' ? 'Novo registo' : 'Editar') + ' — ' + CFG_TABS.find((t) => t[0] === tab)[1], campos, async (v) => {
     const pl = v.preco_local; delete v.preco_local;
     const res = await api('cfg', { method: 'POST', body: { entidade: tab, linha: Object.assign({ id: r.id }, v) } });
-    if (tab === 'artigos') await api('cfg', { method: 'POST', body: { entidade: 'preco_local', linha: { artigo_id: res.id, local_id: S.local, preco: pl } } });
+    if (tab === 'artigos') { await api('cfg', { method: 'POST', body: { entidade: 'preco_local', linha: { artigo_id: res.id, local_id: S.local, preco: pl } } });
+      const fl = $('#fotoF') && $('#fotoF').files[0];
+      if (fl) await api('foto', { method: 'POST', body: { artigo_id: res.id, dados: await reduzFoto(fl) } });
+      else if ($('#fotoR') && $('#fotoR').checked) await api('foto', { method: 'POST', body: { artigo_id: res.id, remover: true } }); }
     toast('Guardado'); delete S.x.cfg; sync(); render();
-  });
+  }, tab === 'artigos' ? `<label>Fotografia do prato ou da bebida (opcional)</label><div class="foto-f"><img src="${esc(r.imagem || '/img/_prato.png')}" alt=""><div><input type="file" id="fotoF" accept="image/*">${String(r.imagem || '').startsWith('/api/foto') ? '<label><input type="checkbox" id="fotoR" style="width:auto"> Remover a fotografia e voltar à ilustração</label>' : ''}<small class="mudo">Sem fotografia, é usada a ilustração da casa. A fotografia é reduzida antes de ser enviada.</small></div></div>` : '');
 }
 
 /* ---------- Acções ---------- */
@@ -470,6 +504,8 @@ const ACOES = {
   carta: (el) => { S.x.carta = el.dataset.c; S.x.busca = ''; S.fam = ''; render(); },
   fam: (el) => { S.fam = el.dataset.id; S.x.busca = ''; render(); },
   ham: () => document.body.classList.toggle('menu-on'),
+  semImg: () => { ls.set('semImg', !ls.get('semImg', false)); render(); },
+  servirTodos: (el) => { const p = P(el.dataset.p); if (!p) return; p.linhas.filter((l) => l.estado === 'pronto' && !AUTO.includes(l.seccao)).forEach((l) => op('linha.estado', { id: l.id, estado: 'entregue' })); toast('Entregue: ' + p.mesa_nome); render(); },
   grp: (el) => { (S.x.grpAb = S.x.grpAb || {})[el.dataset.g] = el.dataset.ab !== '1'; render(); },
   demo: async (el) => { const ap = el.dataset.ac === 'apagar'; if (!confirm(ap ? 'Apagar todos os dados fictícios? Os dados reais que tenha introduzido ficam.' : 'Carregar dados fictícios em todos os menus?')) return;
     try { el.disabled = true; await api('demo', { method: 'POST', body: { acao: el.dataset.ac } }); toast(ap ? 'Dados fictícios apagados' : 'Dados fictícios carregados'); S.x = {}; S.st = null; guardar(); render(); sync(); } catch (e) { toast(e.message, 'erro'); el.disabled = false; } },
@@ -568,5 +604,5 @@ window.addEventListener('offline', () => { S.online = false; pintarEstado(); });
 setInterval(() => { if (!document.hidden) sync(); }, 6000);
 setInterval(() => { if (S.token && S.st && ['cozinha', 'bar', 'mesas'].includes(rota().v) && !S.x.editar && !$('#modal').classList.contains('on')) render(); }, 30000);
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
-Object.assign(VIEWS, { mesas: vMesas, pedido: vPedido, cozinha: () => vKds('cozinha'), bar: () => vKds('bar'), caixa: vCaixa, facturacao: vFact, relatorios: vRel, menu: vMenu, config: vCfg });
+Object.assign(VIEWS, { mesas: vMesas, pedido: vPedido, cozinha: () => vKds('cozinha'), bar: () => vKds('bar'), caixa: vCaixa, facturacao: vFact, relatorios: vRel, menu: vMenu, config: vCfg, servir: vServir });
 function boot() { render(); sync(); }

@@ -21,6 +21,10 @@
   .a { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px dashed #E2CFB2; }
   .a div { flex: 1; } .a b { display: block; } .a small { color: #6B3A26; }
   .a span { font-weight: 700; white-space: nowrap; }
+  .a img.fi { width: 84px; height: 63px; object-fit: cover; border-radius: 10px; flex: none; background: #F1E4CF; } .luxo .a img.fi { border-radius: 2px; background: #14110A; }
+  #alerta img { width: 64px; height: 64px; border-radius: 12px; float: left; margin-right: 12px; background: #F6EAD6; }
+  .imp #btRes, .imp #cartas, .imp #nav, .imp #msg, .imp #cesto, .imp .q { display: none !important; } .imp .a img.fi { width: 60px; height: 45px; } .imp .a { break-inside: avoid; } .imp h2 { break-after: avoid; }
+  @media print { body { background: #fff !important; } .w { max-width: none; padding: 0; } #alerta, #cesto { display: none !important; } }
   .a { align-items: center; } .q { display: flex; align-items: center; gap: 8px; }
   .q button { width: 38px; height: 38px; border-radius: 50%; border: 0; background: #B03F1B; color: #fff; font-size: 22px; font-weight: 700; box-shadow: 0 3px 0 #7A2A10; }
   .q button[data-m] { background: #fff; color: #4A1A0C; box-shadow: 0 3px 0 #C9B08C; }
@@ -111,7 +115,9 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&':
 const kz = (n) => new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 0 }).format(Math.round(n || 0)).replace(/\s/g, ' ') + ' Kz';
 const qs = new URLSearchParams(location.search), l = qs.get('l') || 'principal', mesaId = qs.get('m') || '';
 let M = null, CARTA = location.hash === '#vinhos' ? 'vinhos' : 'menu'; const cesto = {};
-const fams = () => M.familias.filter((f) => (f.carta === 'vinhos') === (CARTA === 'vinhos'));
+const IMP = qs.get('imprimir') === '1';
+const fams = () => (IMP ? M.familias : M.familias.filter((f) => (f.carta === 'vinhos') === (CARTA === 'vinhos')));
+const imgA = (a, f) => a.imagem || (f.seccao === 'bar' ? '/img/_bebida.png' : '/img/_prato.png');
 /* Registo do cliente e acompanhamento do pedido (guardado neste telemóvel durante 8 horas) */
 const CH = 'mdi.cli.' + mesaId;
 let CLI = null; try { CLI = JSON.parse(localStorage.getItem(CH) || 'null'); if (CLI && Date.now() - CLI.t > 8 * 3600e3) CLI = null; } catch (e) {}
@@ -119,13 +125,13 @@ const guardaCli = () => { try { localStorage.setItem(CH, JSON.stringify(CLI)); }
 const TXT = { novo: 'à espera do empregado', enviado: 'enviado para a cozinha', preparar: 'em preparação', pronto: 'pronto, a caminho', entregue: 'entregue', anulado: 'anulado' };
 let ultimo = {};
 function apito() { try { const C = window.AudioContext || window.webkitAudioContext, c = apito.c || (apito.c = new C()); [0, 0.25, 0.5].forEach((t) => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 988; o.connect(g); g.connect(c.destination); g.gain.setValueAtTime(0.3, c.currentTime + t); g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + t + 0.2); o.start(c.currentTime + t); o.stop(c.currentTime + t + 0.22); }); } catch (e) {} }
-function avisa(txt) { const a = el('alerta'); a.textContent = txt; a.style.display = 'block'; clearTimeout(avisa.t); avisa.t = setTimeout(() => { a.style.display = 'none'; }, 12000); apito(); try { navigator.vibrate && navigator.vibrate([300, 150, 300]); } catch (e) {}
+function avisa(txt, pronto) { const a = el('alerta'); a.innerHTML = (pronto ? '<img src="/img/pedido-pronto.gif" alt="">' : '') + esc(txt); a.style.display = 'block'; clearTimeout(avisa.t); avisa.t = setTimeout(() => { a.style.display = 'none'; }, 12000); apito(); try { navigator.vibrate && navigator.vibrate([300, 150, 300]); } catch (e) {}
   try { if (window.Notification && Notification.permission === 'granted') new Notification('Mesa de Imbondeiro', { body: txt }); } catch (e) {} }
 async function segue() {
   if (!CLI || !CLI.seguir) return;
   try { const r = await fetch('/api/pedido-estado?t=' + CLI.seguir), j = await r.json(); if (!r.ok) return;
     const novoPronto = j.linhas.filter((x) => x.estado === 'pronto' && ultimo[x.id] && ultimo[x.id] !== 'pronto'), aceite = j.linhas.filter((x) => x.estado === 'preparar' && ultimo[x.id] && ultimo[x.id] !== 'preparar');
-    if (novoPronto.length) avisa('O seu pedido está pronto e vai a caminho da mesa: ' + novoPronto.map((x) => x.qtd + '× ' + x.nome).join(', '));
+    if (novoPronto.length) avisa('O seu pedido está pronto e vai a caminho da mesa: ' + novoPronto.map((x) => x.qtd + '× ' + x.nome).join(', '), true);
     else if (aceite.length) avisa('A cozinha aceitou o seu pedido e já o está a preparar.');
     ultimo = Object.fromEntries(j.linhas.map((x) => [x.id, x.estado]));
     el('segue').innerHTML = j.linhas.length ? '<div class="cx"><b>' + esc(CLI.nome) + ', o seu pedido</b>' + j.linhas.map((x) => `<div class="ln"><span>${x.qtd}× ${esc(x.nome)}</span><span class="es ${x.estado}">${TXT[x.estado] || x.estado}</span></div>`).join('') + '</div>' : '';
@@ -150,7 +156,7 @@ function desenha() {
   el('cartas').innerHTML = duas ? `<div class="cartas"><button class="${CARTA === 'menu' ? 'on' : ''}" data-c="menu">Menu</button><button class="${CARTA === 'vinhos' ? 'on' : ''}" data-c="vinhos">Carta de vinhos e bar</button></div>` : '';
   el('nav').innerHTML = fams().map((f, i) => `<a href="#f${i}">${esc(f.nome)}</a>`).join('');
   el('aviso18').style.display = CARTA === 'vinhos' ? 'block' : 'none';
-  el('menu').innerHTML = fams().map((f, i) => `<h2 id="f${i}">${esc(f.nome)}</h2>` + f.artigos.map((a) => `<div class="a"><div><b>${esc(a.nome)}</b><small>${esc(a.descricao)}</small></div><span>${kz(a.preco)}</span>${M.mesa ? `<div class="q">${cesto[a.id] ? `<button data-m="${a.id}">−</button><b>${cesto[a.id]}</b>` : ''}<button data-p="${a.id}">+</button></div>` : ''}</div>`).join('')).join('');
+  el('menu').innerHTML = fams().map((f, i) => `<h2 id="f${i}">${esc(f.nome)}</h2>` + f.artigos.map((a) => `<div class="a"><img class="fi" src="${esc(imgA(a, f))}" alt="" loading="${IMP ? 'eager' : 'lazy'}"><div><b>${esc(a.nome)}</b><small>${esc(a.descricao)}</small></div><span>${kz(a.preco)}</span>${M.mesa ? `<div class="q">${cesto[a.id] ? `<button data-m="${a.id}">−</button><b>${cesto[a.id]}</b>` : ''}<button data-p="${a.id}">+</button></div>` : ''}</div>`).join('')).join('');
   const arts = M.familias.flatMap((f) => f.artigos), n = Object.values(cesto).reduce((s, x) => s + x, 0), t = arts.reduce((s, a) => s + (cesto[a.id] || 0) * a.preco, 0);
   el('cesto').style.display = n ? 'flex' : 'none'; el('cestoTxt').textContent = n + (n === 1 ? ' artigo · ' : ' artigos · ') + kz(t);
 }
@@ -182,7 +188,10 @@ fetch('/api/menu?l=' + encodeURIComponent(l) + (mesaId ? '&m=' + encodeURICompon
   M = m; document.body.classList.toggle('luxo', m.tema === 'luxo'); try { localStorage.setItem('mdi.tema', m.tema || ''); } catch (e) {}
   el('local').textContent = m.local + (m.mesa ? ' · ' + m.mesa.nome : '') + (m.morada ? ' · ' + m.morada : '');
   if (m.mesa) el('msg').innerHTML = '<div class="ok">Pode pedir a partir daqui: toque em + nos artigos e envie o pedido.</div>';
+  if (m.taxa_servico > 0) document.querySelector('footer').textContent += ' Ao consumo nas mesas acresce ' + m.taxa_servico + '% de taxa de serviço.';
+  if (IMP) { document.body.classList.add('imp'); document.body.classList.remove('luxo'); }
   desenha(); segue();
+  if (IMP) setTimeout(() => window.print(), 1200);
 }).catch((e) => { el('menu').innerHTML = '<p style="text-align:center">Não foi possível carregar o menu. ' + esc(e.message) + '</p>'; });
 </script>
 

@@ -9,13 +9,14 @@ const db = {
   tx: (fn) => pg.transaction((tx) => fn(async (t, p) => (await tx.query(t, p)).rows)),
 };
 const env = { AUTH_SECRET: 'dev-secret', ADMIN_PASSWORD: 'imbondeiro', DEMO_AUTO: process.env.DEMO_AUTO || '' };
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.gif': 'image/gif', '.webmanifest': 'application/manifest+json' };
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname.startsWith('/api/')) {
     let raw = ''; for await (const c of req) raw += c;
     const r = await handle(db, env, { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), body: raw ? JSON.parse(raw) : {}, token: (req.headers.authorization || '').replace(/^Bearer\s+/i, '') });
     res.statusCode = r.status;
+    if (r.bin) { res.setHeader('Content-Type', r.mime); res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); return res.end(r.bin); }
     if (r.svg) { res.setHeader('Content-Type', 'image/svg+xml'); return res.end(r.svg); }
     res.setHeader('Content-Type', 'application/json'); return res.end(JSON.stringify(r.json));
   }
