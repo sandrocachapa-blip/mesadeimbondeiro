@@ -198,6 +198,7 @@ function mReserva(mesaId, r) {
   async (v) => { await api('reg', { method: 'POST', body: { entidade: 'reservas', linha: Object.assign({ id: r.id, local_id: S.local, estado: r.id && r.estado !== 'pendente' ? r.estado : 'confirmada' }, v) } }); toast('Reserva guardada'); await sync(); render(); });
 }
 const esperaTxt = (c) => (c.min != null ? `<small class="esp-t">à espera há ${c.min} min</small>` : '');
+const zoomP = () => ls.get('zoom', 0.78);
 const filhas = (m) => S.st.mesas.filter((x) => x.junta_a === m.id);
 const mesasVis = () => S.st.mesas.filter((m) => !m.junta_a || !S.st.mesas.some((x) => x.id === m.junta_a));
 const lug = (m) => (m.lugares || 4) + filhas(m).reduce((s, x) => s + (x.lugares || 0), 0);
@@ -207,7 +208,7 @@ function mesa3d(m, i) {
   if (f === 'rect' && n <= 4) w = 110;
   const cima = Math.ceil(n / 2), baixo = n - cima, cad = (k, top) => Array.from({ length: k }, (_, j) => `<i class="cad" style="left:${((j + 1) / (k + 1)) * 100}%;${top ? 'top:-13px' : 'bottom:-13px'}"></i>`).join('');
   const rs = p ? null : resMesa(m);
-  return `<div class="pm ${f} ${rs ? 'res' : ''} ${p ? 'oc ' + cm.cls : ''} ${temQr(p) ? 'qr' : ''} ${(S.x.sel || []).includes(m.id) ? 'sel' : ''}" data-a="mesa" data-id="${m.id}" style="left:${ps.x}%;top:${ps.y}%;width:${w}px;height:${h}px"><i class="sombra"></i>${cad(cima, 1)}${cad(baixo, 0)}<i class="pe"></i><i class="esp1"></i><i class="esp2"></i><i class="tampo"></i><span class="tag"><b>${esc(m.nome)}</b>${p ? kz(p.total) : n + ' lug.'}${esperaTxt(cm)}${resTxt(rs)}${fl.length ? `<small>${fl.length + 1} mesas juntas</small>` : ''}${temQr(p) ? '<em>pedido do cliente</em>' : ''}</span></div>`;
+  return `<div class="pm ${f} ${rs ? 'res' : ''} ${p ? 'oc ' + cm.cls : ''} ${temQr(p) ? 'qr' : ''} ${(S.x.sel || []).includes(m.id) ? 'sel' : ''}" data-a="mesa" data-id="${m.id}" style="left:${ps.x}%;top:${ps.y}%;width:${w}px;height:${h}px"><i class="sombra"></i>${cad(cima, 1)}${cad(baixo, 0)}<i class="pe"></i><i class="esp1"></i><i class="esp2"></i><i class="tampo"></i>${fl.map((_, k) => `<i class="junta" style="left:${((k + 1) / (fl.length + 1)) * 100}%"></i>`).join('')}<span class="tag"><b>${esc(m.nome)}</b>${p ? kz(p.total) : n + ' lug.'}${esperaTxt(cm)}${resTxt(rs)}${fl.length ? `<small>${fl.length + 1} mesas juntas</small>` : ''}${temQr(p) ? '<em>pedido do cliente</em>' : ''}</span></div>`;
 }
 function vMesas() {
   const st = S.st, vis = mesasVis(), zonas = [...new Set(vis.map((m) => m.zona))], nSel = (S.x.sel || []).length;
@@ -223,11 +224,12 @@ function vMesas() {
     ${(st.reservas || []).some((r) => r.estado === 'pendente') ? `<div class="aviso">Há ${st.reservas.filter((r) => r.estado === 'pendente').length} pedido(s) de reserva para hoje por confirmar. <a href="#reservas">Ver reservas</a></div>` : ''}
     ${!st.turno && pode('pagar') ? '<div class="aviso">A caixa está fechada. Pode registar pedidos, mas para receber pagamentos abra a caixa no menu <a href="#caixa">Caixa</a>.</div>' : ''}
     ${ed ? `<div class="aviso ferr"><div><b>Mover:</b> arraste cada mesa para o sítio. <b>Juntar:</b> toque nas mesas a juntar (a primeira fica com o número activo) e escolha «Juntar». As outras deixam de aparecer e a conta passa a ser uma só.</div>
-      <div class="fila" style="margin-top:10px"><button class="btn p" data-a="juntarMesas" ${nSel >= 2 ? '' : 'disabled'}>Juntar${nSel >= 2 ? ' ' + nSel + ' mesas' : ''}</button><button class="btn" data-a="separarMesas" ${nSel ? '' : 'disabled'}>Separar</button><button class="btn" data-a="formaMesas" ${nSel ? '' : 'disabled'}>Mudar forma</button><span class="esp"></span><button class="btn p" data-a="guardarPlanta">Guardar posições</button><button class="btn" data-a="editarPlanta">Fechar</button></div></div>` : ''}
+      <div class="fila" style="margin-top:10px"><button class="btn p" data-a="juntarMesas" ${nSel >= 2 ? '' : 'disabled'}>Juntar${nSel >= 2 ? ' ' + nSel + ' mesas' : ''}</button><button class="btn" data-a="separarMesas" ${nSel ? '' : 'disabled'}>Separar</button><button class="btn" data-a="novaMesa">Adicionar mesa</button><button class="btn" data-a="formaMesas" ${nSel ? '' : 'disabled'}>Mudar forma</button><span class="esp"></span><button class="btn p" data-a="guardarPlanta">Guardar posições</button><button class="btn" data-a="editarPlanta">Fechar</button></div></div>` : ''}
     ${soltas.length ? `<h3 class="zona">Balcão e take-away</h3><div class="grelha">${soltas.map((p) => `<button class="mesa oc ${corMesa(p).cls}" data-a="abrir" data-id="${p.id}"><b>${esc(p.mesa_nome)}</b><span class="mudo">${esc(p.aberto_por_nome)} · ${hora(p.aberto_em)}</span>${esperaTxt(corMesa(p))}<span class="tot">${kz(p.total)}</span></button>`).join('')}</div>` : ''}
     <div class="legenda"><span><i class="l0"></i>Livre</span><span><i class="l4"></i>Reservada hoje</span><span><i class="l1"></i>Ocupada, pedido em dia</span><span><i class="l2"></i>À espera há 10 min ou mais</span><span><i class="l3"></i>À espera há 30 min ou mais</span><span class="mudo">A espera pára quando a cozinha ou o bar dão o pedido como pronto.</span></div>
     ${modo === 'planta' ? `<div class="chips" style="margin-top:12px">${zonas.map((z) => `<button class="chip ${z === S.x.zona ? 'on' : ''}" data-a="zona" data-id="${esc(z)}">${esc(z)}</button>`).join('')}</div>
-      <div class="planta-w"><div class="planta ${ed ? 'editar' : ''}" id="planta">${vis.filter((m) => m.zona === S.x.zona).map(mesa3d).join('')}</div></div>`
+      ${ed ? '' : `<div class="zoom"><span class="mudo">Distância da planta</span><button class="btn s" data-a="zoomPlanta" data-d="-1" title="Afastar">−</button><button class="btn s" data-a="zoomPlanta" data-d="1" title="Aproximar">+</button></div>`}
+      <div class="planta-w"><div class="planta ${ed ? 'editar' : ''}" id="planta" style="--z:${zoomP()}">${vis.filter((m) => m.zona === S.x.zona).map(mesa3d).join('')}</div></div>`
     : zonas.map((z) => `<h3 class="zona">${esc(z)}</h3><div class="grelha">${vis.filter((m) => m.zona === z).map(cartao).join('')}</div>`).join('')}`;
 }
 
@@ -441,6 +443,13 @@ const ACOES = {
     try { await api('mesas-juntar', { method: 'POST', body: { principal: sel[0], outras: sel.slice(1) } }); S.x.sel = []; toast('Mesas juntas: fica activa só a ' + S.st.mesas.find((m) => m.id === sel[0]).nome); await sync(); await sync(); render(); } catch (e) { toast(e.message, 'erro'); } },
   separarMesas: async () => { const sel = (S.x.sel || []).filter((id) => S.st.mesas.some((m) => m.junta_a === id)); if (!sel.length) return toast('Toque numa mesa junta para a separar', 'erro');
     try { for (const id of sel) await api('mesas-separar', { method: 'POST', body: { principal: id } }); S.x.sel = []; toast('Mesas separadas'); await sync(); await sync(); render(); } catch (e) { toast(e.message, 'erro'); } },
+  zoomPlanta: (el) => { const z = Math.min(1.05, Math.max(0.45, Math.round((zoomP() + Number(el.dataset.d) * 0.1) * 100) / 100)); ls.set('zoom', z); render(); },
+  novaMesa: () => { const nomes = S.st.mesas.map((m) => m.nome); let n = S.st.mesas.length + 1; while (nomes.includes('Mesa ' + n)) n++;
+    form('Adicionar mesa', [{ k: 'nome', label: 'Nome ou número', value: 'Mesa ' + n, req: 1 }, { k: 'lugares', label: 'Lugares', type: 'number', value: 4 }, { k: 'zona', label: 'Zona (escreva um nome novo para criar outra zona)', value: S.x.zona || 'Sala', req: 1 }, { k: 'forma', label: 'Forma', type: 'select', options: [['quadrada', 'Quadrada'], ['redonda', 'Redonda'], ['rect', 'Rectangular']] }],
+    async (v) => { if (nomes.includes(v.nome)) throw new Error('Já existe uma mesa com esse nome');
+      const r = await api('cfg', { method: 'POST', body: { entidade: 'mesas', linha: { local_id: S.local, zona: v.zona, nome: v.nome, lugares: Math.max(1, Number(v.lugares) || 4), ordem: S.st.mesas.length + 1, activo: true } } });
+      await api('planta', { method: 'POST', body: { mesas: [{ id: r.id, x: 50, y: 50, forma: v.forma }] } });
+      S.x.zona = v.zona; toast(v.nome + ' adicionada: arraste-a para o sítio'); await sync(); await sync(); render(); }); },
   formaMesas: () => { (S.x.sel || []).forEach((id) => { const m = S.st.mesas.find((x) => x.id === id), i = mesasVis().filter((x) => x.zona === m.zona).indexOf(m), ps = Object.assign({}, posMesa(m, i)); ps.forma = { quadrada: 'redonda', redonda: 'rect', rect: 'quadrada' }[ps.forma || 'quadrada']; (S.x.pos = S.x.pos || {})[id] = ps; }); render(); },
   verConta: () => { S.x.verConta = !S.x.verConta; render(); window.scrollTo(0, 0); },
   modoMesas: (el) => { S.x.modoMesas = el.dataset.m; S.x.editar = false; render(); },
