@@ -451,3 +451,29 @@ body.emp-ped .lado, body.emp-ped .topo, body.emp-ped .vela { display: none !impo
 .ga-b { display: flex; border-top: 1px solid #F0E6D5; } .ga-b button { flex: 1; border: 0; border-right: 1px solid #F0E6D5; background: #FCF8F1; color: var(--castanho); font-weight: 600; font-size: 12.5px; padding: 10px 4px; min-height: 42px; } .ga-b button:last-child { border-right: 0; }
 .ga-b button:first-child { flex: 0 0 42px; font-size: 17px; color: #C9B08C; } .ga-b button.on { color: var(--am); } .ga-b .pg { color: var(--vm2); } .ga-b button:hover { background: #F5ECDC; }
 .tema-luxo .ga { background: #14120E; border-color: var(--linha); border-radius: 3px; box-shadow: none; } .tema-luxo .ga-i { background: #14110A; } .tema-luxo .ga-p span { color: var(--ouro); } .tema-luxo .ga-b, .tema-luxo .ga-b button { border-color: #221F18; background: #0B0A08; color: #CFC3A8; } .tema-luxo .ga-b button.on { color: var(--ouro); } .tema-luxo .ga-b .pg { color: #F0B4AC; }
+
+/* ---------- v14: dashboards de gestão ---------- */
+:root { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --g-grade: #EFE4D2; --g-eixo: #D9C7A8; --g-tx: #7A6652; --g-sup: #fff; }
+body.tema-luxo { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --g-grade: #24201A; --g-eixo: #3A3428; --g-tx: #A99C82; --g-sup: #14120E; }
+.g-f { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.dash .kpis { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); } .dash .kpi b { font-size: 26px; margin: 2px 0; } .dash .kpi { font-size: 13.5px; color: var(--castanho-2); }
+.g-g { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; } .g-cx.larga { grid-column: 1 / -1; } @media (max-width: 1000px) { .g-g { grid-template-columns: 1fr; } }
+.g-cx header { margin-bottom: 10px; } .g-cx h3 { margin: 0; font: 600 17px var(--titulo); } .g-cx header small { color: var(--castanho-2); font-size: 12.5px; }
+svg.g { width: 100%; height: auto; display: block; overflow: visible; }
+.g-gr { stroke: var(--g-grade); stroke-width: 1; } .g-ax { stroke: var(--g-eixo); stroke-width: 1; } .g-tx { fill: var(--g-tx); font: 500 11.5px var(--texto); font-variant-numeric: tabular-nums; }
+.g-ln { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; } .g-ar { opacity: .1; stroke: none; }
+.g-ln.s1 { stroke: var(--s1); } .g-ln.s2 { stroke: var(--s2); } .g-ln.s3 { stroke: var(--s3); } .g-ln.s4 { stroke: var(--s4); }
+.g-ar.s1, .g-b.s1, circle.s1 { fill: var(--s1); } .g-ar.s2, .g-b.s2, circle.s2 { fill: var(--s2); } .g-ar.s3, .g-b.s3, circle.s3 { fill: var(--s3); } .g-ar.s4, .g-b.s4, circle.s4 { fill: var(--s4); }
+i.s1 { background: var(--s1); } i.s2 { background: var(--s2); } i.s3 { background: var(--s3); } i.s4 { background: var(--s4); }
+.g-c rect { fill: transparent; } .g-c line { stroke: var(--g-eixo); stroke-width: 1; opacity: 0; } .g-c circle { opacity: 0; stroke: var(--g-sup); stroke-width: 2; }
+.g-c:hover line, .g-c:hover circle { opacity: 1; } .g-c.bar:hover rect { fill: rgba(128,128,128,.09); }
+.g-leg { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; font-size: 13px; color: var(--castanho-2); } .g-leg span { display: inline-flex; align-items: center; gap: 6px; } .g-leg i { width: 12px; height: 12px; border-radius: 3px; }
+.g-h { display: grid; gap: 9px; } .g-hl { display: grid; grid-template-columns: minmax(90px, 34%) 1fr auto; gap: 10px; align-items: center; font-size: 13.5px; padding: 2px 0; }
+.g-hl span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .g-hl div { height: 12px; } .g-hl i { display: block; height: 100%; border-radius: 0 4px 4px 0; min-width: 3px; } .g-hl b { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; } .g-hl:hover { background: rgba(128,128,128,.07); }
+.g-tab { margin-top: 10px; border-top: 1px solid var(--g-grade); padding-top: 8px; } .g-tab summary { cursor: pointer; font-size: 12.5px; color: var(--castanho-2); font-weight: 600; } .g-tab table { margin-top: 6px; font-size: 13px; } .g-cx td, .g-cx th { font-variant-numeric: tabular-nums; }
+#gtip { position: fixed; z-index: 60; display: none; pointer-events: none; background: #fff; color: #2C0E05; border: 1px solid #E2CFB2; border-radius: 10px; padding: 8px 10px; font: 500 12.5px var(--texto); box-shadow: 0 10px 24px -10px rgba(44,14,5,.5); max-width: 280px; }
+#gtip b { display: block; margin-bottom: 3px; } #gtip div { display: flex; align-items: center; gap: 6px; } #gtip i { width: 10px; height: 10px; border-radius: 3px; flex: none; } #gtip span { flex: 1; opacity: .75; } #gtip strong { font-variant-numeric: tabular-nums; margin-left: 10px; }
+#gtip.lx { background: #1C1914; color: #EFE6D2; border-color: #8C7335; }
+.dash .kpis { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); } .dash .kpi b { color: var(--castanho); text-shadow: none; } .dash .kpi b.neg { color: #C8221A; } body.tema-luxo .dash .kpi b.neg { color: #F0B4AC; }
+.g-cx td.dir, .g-cx th.dir { white-space: nowrap; }
+@media (max-width: 600px) { .dash .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dash .kpi b { font-size: 20px; } .g-f .esp { display: none; } }

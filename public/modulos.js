@@ -363,3 +363,104 @@ Object.assign(ACOES, {
     async (v) => { const r = await api('cfg', { method: 'POST', body: { entidade: 'precos_lote', linha: v } }); toast(r.n + ' preço(s) actualizado(s)'); delete S.x.cfg; sync(); render(); },
     '<p class="mudo" style="margin-top:10px">Altera o preço base dos artigos activos. Os preços definidos só para um local não mudam.</p>'),
 });
+
+/* ---------- Dashboards dos menus de gestão (gráficos em SVG, sem bibliotecas) ---------- */
+const kzC = (n) => { const a = Math.abs(n || 0); return a >= 1e6 ? num(n / 1e6, 1) + ' M' : a >= 1e4 ? num(n / 1e3, 0) + ' mil' : num(n, 0); };
+const dCurto = (iso) => iso.slice(8) + '/' + iso.slice(5, 7);
+const MESES_C = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'], mCurto = (m) => MESES_C[Number(m.slice(5)) - 1] + ' ' + m.slice(2, 4);
+const gTip = (t, r) => `data-t="${esc(JSON.stringify({ t, r }))}"`;
+function gEscala(max) { if (!(max > 0)) return { top: 1, ticks: [0, 1] }; const p = Math.pow(10, Math.floor(Math.log10(max))); const passo = [0.25, 0.5, 1, 2, 2.5, 5, 10].map((k) => k * p).find((s) => max / s <= 4); const top = Math.ceil(max / passo) * passo; return { top, ticks: Array.from({ length: Math.round(top / passo) + 1 }, (_, i) => i * passo) }; }
+const gLeg = (series) => (series.length > 1 ? `<div class="g-leg">${series.map((s) => `<span><i class="${s.cor}"></i>${esc(s.nome)}</span>`).join('')}</div>` : '');
+const gEixos = (W, H, m, esc_, fmt) => esc_.ticks.map((v) => { const y = H - m.b - (v / esc_.top) * (H - m.t - m.b); return `<line class="g-gr" x1="${m.l}" x2="${W - m.r}" y1="${y}" y2="${y}"/><text class="g-tx" x="${m.l - 8}" y="${y + 4}" text-anchor="end">${fmt(v)}</text>`; }).join('');
+// Linhas: evolução no tempo, uma ou duas séries na mesma unidade
+function gLinha(series, rotulos, o) {
+  o = o || {}; const W = o.W || (window.innerWidth < 700 ? 470 : 720), H = 250, m = { l: 58, r: 14, t: 12, b: 28 }, n = rotulos.length, fmt = o.fmt || kzC, val = o.val || kz;
+  const e = gEscala(Math.max(...series.flatMap((s) => s.vals), 0)), X = (i) => m.l + (n > 1 ? i * (W - m.l - m.r) / (n - 1) : (W - m.l - m.r) / 2), Y = (v) => H - m.b - (v / e.top) * (H - m.t - m.b), cw = (W - m.l - m.r) / Math.max(1, n - 1);
+  const passoX = Math.max(1, Math.ceil(n / (W < 600 ? 5 : 7)));
+  return `${gLeg(series)}<svg class="g" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.aria || '')}">${gEixos(W, H, m, e, fmt)}
+    ${rotulos.map((r, i) => ((n - 1 - i) % passoX === 0 ? `<text class="g-tx" x="${X(i)}" y="${H - 8}" text-anchor="middle">${esc(r)}</text>` : '')).join('')}
+    ${series.map((s, k) => `${series.length === 1 ? `<path class="g-ar ${s.cor}" d="M${X(0)},${Y(0)} ${s.vals.map((v, i) => `L${X(i)},${Y(v)}`).join(' ')} L${X(n - 1)},${Y(0)} Z"/>` : ''}<path class="g-ln ${s.cor}" d="${s.vals.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ')}"/>`).join('')}
+    ${rotulos.map((r, i) => `<g class="g-c" ${gTip(o.tit ? o.tit(i) : r, series.map((s) => [s.cor, s.nome, val(s.vals[i])]))}><rect x="${X(i) - cw / 2}" y="${m.t}" width="${cw}" height="${H - m.t - m.b}"/><line x1="${X(i)}" x2="${X(i)}" y1="${m.t}" y2="${H - m.b}"/>${series.map((s) => `<circle class="${s.cor}" cx="${X(i)}" cy="${Y(s.vals[i])}" r="4.5"/>`).join('')}</g>`).join('')}</svg>`;
+}
+// Barras verticais: uma série (ex.: vendas por hora) ou duas lado a lado (ex.: receitas e custos por mês)
+function gBarras(series, rotulos, o) {
+  o = o || {}; const W = o.W || (window.innerWidth < 700 ? 470 : 720), H = 250, m = { l: 58, r: 14, t: 12, b: 28 }, n = rotulos.length, k = series.length, fmt = o.fmt || kzC, val = o.val || kz;
+  const e = gEscala(Math.max(...series.flatMap((s) => s.vals), 0)), cw = (W - m.l - m.r) / n, bw = Math.min(26, (cw - 6 - (k - 1) * 2) / k), Y = (v) => H - m.b - (v / e.top) * (H - m.t - m.b), passoX = Math.max(1, Math.ceil(n / (W < 600 ? 8 : 12)));
+  const barra = (x, v, cor) => { const y = Y(v), h = H - m.b - y, r = Math.min(4, h, bw / 2); return h < 0.5 ? '' : `<path class="g-b ${cor}" d="M${x},${H - m.b} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${H - m.b} Z"/>`; };
+  return `${gLeg(series)}<svg class="g" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.aria || '')}">${gEixos(W, H, m, e, fmt)}
+    ${rotulos.map((r, i) => { const x0 = m.l + i * cw + (cw - (k * bw + (k - 1) * 2)) / 2; return `<g class="g-c bar" ${gTip(o.tit ? o.tit(i) : r, series.map((s) => [s.cor, s.nome, val(s.vals[i])]))}><rect x="${m.l + i * cw}" y="${m.t}" width="${cw}" height="${H - m.t - m.b}"/>${series.map((s, j) => barra(x0 + j * (bw + 2), s.vals[i], s.cor)).join('')}${i % passoX === 0 ? `<text class="g-tx" x="${m.l + i * cw + cw / 2}" y="${H - 8}" text-anchor="middle">${esc(r)}</text>` : ''}</g>`; }).join('')}
+    <line class="g-ax" x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}"/></svg>`;
+}
+// Barras horizontais: ordenação de categorias, com o valor escrito ao lado
+function gHBar(rows, o) {
+  o = o || {}; const val = o.val || kz, max = Math.max(...rows.map((r) => r.v), 0), tot = rows.reduce((s, r) => s + r.v, 0);
+  return rows.length ? `<div class="g-h">${rows.map((r) => `<div class="g-hl" ${gTip(r.nome, [[o.cor || 's1', o.rotulo || 'Valor', val(r.v)]].concat(o.parte === false ? [] : [['', 'Parte do total', pct(r.v, tot) + '%']]).concat(r.sub ? [['', o.subR || 'Detalhe', r.sub]] : []))}><span title="${esc(r.nome)}">${esc(r.nome)}</span><div><i class="${o.cor || 's1'}" style="width:${max ? Math.max(1.5, r.v / max * 100) : 0}%"></i></div><b>${val(r.v)}</b></div>`).join('')}</div>` : '<p class="mudo">Sem dados neste período.</p>';
+}
+const gCx = (tit, sub, corpo, tab, larga) => `<section class="cartao g-cx ${larga ? 'larga' : ''}"><header><h3>${tit}</h3>${sub ? `<small>${sub}</small>` : ''}</header>${corpo}${tab ? `<details class="g-tab"><summary>Ver tabela</summary><div style="overflow:auto"><table>${tab}</table></div></details>` : ''}</section>`;
+const gT = (cab, rows) => `<tr>${cab.map((c, i) => `<th class="${i ? 'dir' : ''}">${c}</th>`).join('')}</tr>${rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? 'dir' : ''}">${c}</td>`).join('')}</tr>`).join('')}`;
+const outros = (rows, n) => (rows.length > n ? rows.slice(0, n - 1).concat([{ nome: 'Outras', v: rows.slice(n - 1).reduce((s, r) => s + r.v, 0) }]) : rows);
+function kpiD(rotulo, valor, cur, ant, o) {
+  o = o || {}; let dl = '';
+  if (ant != null) { if (!ant) dl = '<small>sem período anterior</small>'; else { const v = Math.round((cur - ant) / ant * 100), bom = (v >= 0) === (o.bomSobe !== false); dl = `<small class="${v === 0 ? '' : bom ? 'sobe' : 'desce'}">${v > 0 ? '▲ +' : v < 0 ? '▼ ' : '● '}${v}% face ao período anterior</small>`; } }
+  return `<div class="cartao kpi">${rotulo}<b class="${o.neg ? 'neg' : ''}">${valor}</b>${dl}${o.nota ? `<small>${o.nota}</small>` : ''}</div>`;
+}
+const dashP = () => ({ dias: ls.get('dashDias', 30), todos: !!S.x.dashTodos && !S.user.local_id });
+function dashTela(t, tit, desenha) {
+  const p = dashP(), c = carregar('dash', () => api('dash', { query: { t, dias: p.dias, local: p.todos ? 'todos' : S.local } }));
+  const filtros = `<div class="g-f"><div class="seg">${[7, 30, 90].map((n) => `<button class="${p.dias === n ? 'on' : ''}" data-a="dashDias" data-id="${n}">${n} dias</button>`).join('')}</div>${!S.user.local_id && S.st.locais.length > 1 ? `<div class="seg"><button class="${p.todos ? '' : 'on'}" data-a="dashLocal" data-id="">${esc(S.st.local.nome)}</button><button class="${p.todos ? 'on' : ''}" data-a="dashLocal" data-id="1">Todos os locais</button></div>` : ''}${c && c.d ? `<span class="mudo">${dCurto(c.d.de)} a ${dCurto(c.d.ate)}</span>` : ''}<span class="esp"></span><button class="btn s" data-a="dashRef">Actualizar</button></div>`;
+  return `<div class="cab"><h1>${tit}</h1></div>${filtros}` + (!c || c.erro ? espera(c) : `<div class="dash">${desenha(c.d)}</div>`);
+}
+const TIPO_N = { mesa: 'Mesa', balcao: 'Balcão', takeaway: 'Take-away', entrega: 'Entrega' };
+const nomeMeio = (m) => (MEIOS.find((x) => x[0] === m) || [])[1] || (m ? m.charAt(0).toUpperCase() + m.slice(1) : '—');
+VIEWS.dgestao = () => dashTela('gestao', 'Dashboard de vendas', (d) => {
+  const tk = d.k.contas ? d.k.vendas / d.k.contas : 0, tkA = d.ant.contas ? d.ant.vendas / d.ant.contas : 0, eixo = d.eixo.map(dCurto), hs = d.horas.map((v, h) => ({ h, v })).filter((x) => x.v > 0), h0 = hs.length ? Math.max(0, hs[0].h - 1) : 10, h1 = hs.length ? Math.min(23, hs[hs.length - 1].h + 1) : 23;
+  const horas = d.horas.slice(h0, h1 + 1), hR = horas.map((_, i) => (h0 + i) + 'h'), pico = hs.slice().sort((a, b) => b.v - a.v)[0], fam = outros(d.familias, 8);
+  return `<div class="kpis">${kpiD('Vendas', kz(d.k.vendas), d.k.vendas, d.ant.vendas)}${kpiD('Contas fechadas', num(d.k.contas, 0), d.k.contas, d.ant.contas)}${kpiD('Valor médio por conta', kz(tk), tk, tkA)}${kpiD('Custo da mercadoria vendida', d.cmv ? pct(d.cmv, d.k.vendas) + '%' : '—', null, null, { nota: d.cmv ? kz(d.cmv) + ' em ingredientes' : 'sem fichas técnicas ligadas' })}${kpiD('Descontos e anulações', kz(d.k.descontos + d.anuladas.v), null, null, { nota: d.anuladas.n + ' linha(s) anulada(s)' })}</div>
+  <div class="g-g">
+    ${gCx('Vendas por dia', 'Total facturado em cada dia do período', gLinha([{ nome: 'Vendas', cor: 's1', vals: d.vendasDia }], eixo, { aria: 'Vendas por dia', tit: (i) => eixo[i] + ' · ' + d.contasDia[i] + ' conta(s)' }), gT(['Dia', 'Contas', 'Vendas'], d.eixo.map((x, i) => [dCurto(x), d.contasDia[i], kz(d.vendasDia[i])])), true)}
+    ${gCx('Vendas por hora do dia', pico ? 'Hora mais forte: ' + pico.h + 'h, com ' + kz(pico.v) + ' no período' : 'Soma do período por hora de fecho da conta', gBarras([{ nome: 'Vendas', cor: 's1', vals: horas }], hR, { aria: 'Vendas por hora', W: 470 }), gT(['Hora', 'Vendas'], horas.map((v, i) => [hR[i], kz(v)])))}
+    ${gCx('Artigos mais vendidos', 'Por valor de venda', gHBar(d.top.map((r) => ({ nome: r.nome, v: r.v, sub: r.qtd + ' un.' })), { subR: 'Quantidade' }), gT(['Artigo', 'Qtd.', 'Valor'], d.top.map((r) => [esc(r.nome), r.qtd, kz(r.v)])))}
+    ${gCx('Vendas por família', '', gHBar(fam, { cor: 's3' }), gT(['Família', 'Valor'], d.familias.map((r) => [esc(r.nome), kz(r.v)])))}
+    ${gCx('Meios de pagamento', '', gHBar(d.meios.map((r) => ({ nome: nomeMeio(r.nome), v: r.v })), { cor: 's2' }), gT(['Meio', 'Valor'], d.meios.map((r) => [esc(nomeMeio(r.nome)), kz(r.v)])))}
+    ${gCx('Tipo de serviço', 'Mesa, balcão, take-away e entregas', gHBar(d.tipos.map((r) => ({ nome: TIPO_N[r.nome] || r.nome, v: r.v, sub: r.c + ' conta(s)' })), { cor: 's4', subR: 'Contas' }), gT(['Tipo', 'Contas', 'Valor'], d.tipos.map((r) => [esc(TIPO_N[r.nome] || r.nome), r.c, kz(r.v)])))}
+    ${gCx('Vendas por empregado', 'Quem abriu a conta', gHBar(d.empregados.map((r) => ({ nome: r.nome, v: r.v, sub: r.c + ' conta(s)' })), { subR: 'Contas' }), gT(['Empregado', 'Contas', 'Valor'], d.empregados.map((r) => [esc(r.nome), r.c, kz(r.v)])))}
+    ${d.locais.length ? gCx('Vendas por local', '', gHBar(d.locais, { cor: 's3' }), gT(['Local', 'Valor'], d.locais.map((r) => [esc(r.nome), kz(r.v)]))) : ''}
+  </div>`; });
+VIEWS.dstock = () => dashTela('stock', 'Dashboard de stock e compras', (d) => {
+  const eixo = d.eixo.map(dCurto), fc = d.vendas ? pct(d.cmv, d.vendas) : 0;
+  return `<div class="kpis">${kpiD('Valor do stock', kz(d.valor), null, null, { nota: d.itens + ' ingrediente(s) activo(s)' })}${kpiD('Abaixo do mínimo', num(d.abaixo.length, 0), null, null, { neg: d.abaixo.length > 0, nota: d.abaixo.length ? '▲ encomendar' : '✓ tudo acima do mínimo' })}${kpiD('Compras recebidas', kz(d.compras.v), d.compras.v, d.comprasAnt, { bomSobe: false })}${kpiD('Consumo por vendas', kz(d.cmv), null, null, { nota: d.vendas ? fc + '% das vendas' : 'sem vendas no período' })}${kpiD('Quebras e consumo interno', kz(d.perdas), null, null, { neg: d.perdas > 0 })}${kpiD('Por pagar a fornecedores', kz(d.porPagar.v), null, null, { neg: d.porPagar.venc > 0, nota: d.porPagar.venc ? '▲ ' + d.porPagar.venc + ' factura(s) vencida(s)' : 'nada vencido' })}</div>
+  <div class="g-g">
+    ${gCx('Entradas e consumo por dia', 'Valor das compras que entraram e do que saiu por vendas', gLinha([{ nome: 'Entradas (compras)', cor: 's1', vals: d.entradas }, { nome: 'Consumo (vendas)', cor: 's2', vals: d.consumo }], eixo, { aria: 'Entradas e consumo de stock por dia' }), gT(['Dia', 'Entradas', 'Consumo'], d.eixo.map((x, i) => [dCurto(x), kz(d.entradas[i]), kz(d.consumo[i])])), true)}
+    ${gCx('Onde está o dinheiro do stock', 'Ingredientes com mais valor em armazém', gHBar(d.topValor.map((r) => ({ nome: r.nome, v: r.v, sub: num(r.qtd) + ' ' + r.unidade })), { subR: 'Existência' }), gT(['Ingrediente', 'Existência', 'Valor'], d.topValor.map((r) => [esc(r.nome), num(r.qtd) + ' ' + esc(r.unidade), kz(r.v)])))}
+    ${gCx('Ingredientes mais consumidos', 'Saídas por vendas no período', gHBar(d.topConsumo.map((r) => ({ nome: r.nome, v: r.v, sub: num(r.qtd) + ' ' + r.unidade })), { cor: 's2', subR: 'Quantidade' }), gT(['Ingrediente', 'Quantidade', 'Valor'], d.topConsumo.map((r) => [esc(r.nome), num(r.qtd) + ' ' + esc(r.unidade), kz(r.v)])))}
+    ${gCx('Compras por fornecedor', d.compras.c + ' compra(s) recebida(s)', gHBar(d.fornecedores.map((r) => ({ nome: r.nome, v: r.v, sub: r.c + ' compra(s)' })), { cor: 's3', subR: 'Compras' }), gT(['Fornecedor', 'Compras', 'Valor'], d.fornecedores.map((r) => [esc(r.nome), r.c, kz(r.v)])))}
+    ${gCx('Abaixo do mínimo', '', d.abaixo.length ? `<table>${gT(['Ingrediente', 'Existência', 'Mínimo'], d.abaixo.slice(0, 10).map((r) => [`<span class="est erro">▲ repor</span> ${esc(r.nome)}`, num(r.qtd) + ' ' + esc(r.unidade), num(r.min) + ' ' + esc(r.unidade)]))}</table><a class="btn s" href="#compras" style="margin-top:10px">Fazer encomenda</a>` : '<p class="mudo">✓ Nenhum ingrediente abaixo do mínimo.</p>')}
+    ${gCx('Facturas de fornecedores por pagar', '', d.dividas.length ? `<table>${gT(['Fornecedor', 'Vencimento', 'Em falta'], d.dividas.map((r) => [esc(r.fornecedor) + (r.num_factura ? ' · ' + esc(r.num_factura) : ''), (r.vencimento && r.vencimento < d.hoje ? '<span class="est erro">▲ vencida</span> ' : '') + esc(r.vencimento ? r.vencimento.split('-').reverse().join('/') : '—'), kz(r.falta)]))}</table>` : '<p class="mudo">✓ Sem facturas por pagar.</p>')}
+  </div>`; });
+VIEWS.dpessoas = () => dashTela('pessoas', 'Dashboard de pessoas e dinheiro', (d) => {
+  const ms = d.meses.map(mCurto), i = d.meses.length - 1, res = d.receitas[i] - d.custos[i], saldo = d.bancos.reduce((s, b) => s + b.v, 0);
+  return `<div class="kpis">${kpiD('Resultado estimado do mês', kz(res), null, null, { neg: res < 0, nota: 'receitas ' + kz(d.receitas[i]) + ' − custos ' + kz(d.custos[i]) })}${kpiD('Funcionários activos', num(d.nFun, 0), null, null, { nota: d.presentes + ' com ponto aberto agora' })}${kpiD('Massa salarial mensal', kz(d.massa), null, null, { nota: d.receitas[i] ? pct(d.massa, d.receitas[i]) + '% das vendas do mês' : 'base e subsídios' })}${kpiD('Horas trabalhadas', num(d.horasTot, 0) + ' h', null, null, { nota: 'ponto registado em ' + d.dias + ' dias' })}${kpiD('Saldo em bancos', kz(saldo), null, null, { neg: saldo < 0 })}${kpiD('Por pagar', kz(d.porPagar), null, null, { nota: 'fornecedores e despesas' })}</div>
+  <div class="g-g">
+    ${gCx('Receitas e custos por mês', 'Custos = mercadoria consumida, pessoal e despesas', gBarras([{ nome: 'Receitas', cor: 's1', vals: d.receitas }, { nome: 'Custos', cor: 's2', vals: d.custos }], ms, { aria: 'Receitas e custos por mês' }), gT(['Mês', 'Receitas', 'Mercadoria', 'Pessoal', 'Despesas', 'Resultado'], d.meses.map((m, k) => [mCurto(m), kz(d.receitas[k]), kz(d.cmvMes[k]), kz(d.pessMes[k]), kz(d.despMes[k]), kz(d.receitas[k] - d.custos[k])])), true)}
+    ${gCx('Custo de pessoal por mês', d.ultimo ? 'Último processamento: ' + mCurto(d.ultimo.mes) + ' · ' + d.ultimo.c + ' recibo(s) · líquido ' + kz(d.ultimo.liq) : 'Ainda sem salários processados', gBarras([{ nome: 'Pessoal', cor: 's3', vals: d.pessMes }], ms, { aria: 'Custo de pessoal por mês', W: 470 }), gT(['Mês', 'Custo de pessoal'], d.meses.map((m, k) => [mCurto(m), kz(d.pessMes[k])])))}
+    ${gCx('Massa salarial por função', 'Salário base e subsídios', gHBar(d.funcoes.map((r) => ({ nome: r.nome, v: r.v, sub: r.c + ' pessoa(s)' })), { cor: 's3', subR: 'Pessoas' }), gT(['Função', 'Pessoas', 'Valor mensal'], d.funcoes.map((r) => [esc(r.nome), r.c, kz(r.v)])))}
+    ${gCx('Horas por funcionário', 'Ponto registado no período', gHBar(d.horas.map((r) => ({ nome: r.nome, v: r.v })), { val: (v) => num(v, 0) + ' h', rotulo: 'Horas', cor: 's4' }), gT(['Funcionário', 'Horas'], d.horas.map((r) => [esc(r.nome), num(r.v, 1)])))}
+    ${gCx('Despesas por categoria', kz(d.despesas) + ' no período', gHBar(d.categorias, { cor: 's2' }), gT(['Categoria', 'Valor'], d.categorias.map((r) => [esc(r.nome), kz(r.v)])))}
+    ${gCx('Saldos bancários', '', gHBar(d.bancos.map((b) => ({ nome: b.nome, v: Math.max(0, b.v) })), { parte: false }), gT(['Conta', 'Saldo'], d.bancos.map((b) => [esc(b.nome), kz(b.v)])))}
+    ${gCx('Ausências no período', '', d.ausencias.length ? `<table>${gT(['Tipo', 'Registos'], d.ausencias.map((a) => [esc(a.nome), a.c]))}</table><a class="btn s" href="#equipa" style="margin-top:10px">Ver equipa</a>` : '<p class="mudo">✓ Sem ausências registadas.</p>')}
+  </div>`; });
+Object.assign(ACOES, {
+  dashDias: (el) => { ls.set('dashDias', Number(el.dataset.id)); delete S.x.dash; render(); },
+  dashLocal: (el) => { S.x.dashTodos = !!el.dataset.id; delete S.x.dash; render(); },
+  dashRef: () => { delete S.x.dash; render(); },
+});
+// Dica ao passar (ou tocar) em qualquer marca de gráfico
+(() => { let tip = null;
+  const mostra = (e) => { const el = e.target.closest && e.target.closest('[data-t]'); if (!el) { if (tip) tip.style.display = 'none'; return; }
+    if (!tip) { tip = document.createElement('div'); tip.id = 'gtip'; document.body.appendChild(tip); }
+    let d; try { d = JSON.parse(el.dataset.t); } catch (x) { return; }
+    tip.innerHTML = `<b>${esc(d.t)}</b>${d.r.map((r) => `<div>${r[0] ? `<i class="${r[0]}"></i>` : '<i style="visibility:hidden"></i>'}<span>${esc(r[1])}</span><strong>${esc(r[2])}</strong></div>`).join('')}`;
+    tip.className = document.body.classList.contains('tema-luxo') ? 'lx' : ''; tip.style.display = 'block';
+    const w = tip.offsetWidth, h = tip.offsetHeight, x = Math.min(window.innerWidth - w - 8, Math.max(8, e.clientX + 14)), y = e.clientY - h - 12 < 8 ? e.clientY + 18 : e.clientY - h - 12; tip.style.left = x + 'px'; tip.style.top = y + 'px'; };
+  document.addEventListener('pointermove', mostra); document.addEventListener('pointerdown', mostra); window.addEventListener('hashchange', () => { if (tip) tip.style.display = 'none'; });
+})();

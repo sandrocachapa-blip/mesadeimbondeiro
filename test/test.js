@@ -425,6 +425,13 @@ global.__t1 = (async () => {
   token = ''; assert.equal((await raw('POST', 'cfg', { entidade: 'artigos', apagar: cafe.id })).status, 401); token = tk;
   // dados fictícios trazem bairros e entregas
   await call('POST', 'demo', { acao: 'carregar' }); st = await call('GET', 'state'); assert.ok(st.bairros.length >= 6); assert.equal(st.pedidos.filter((x) => x.id.startsWith('demo-en-')).length, 2);
+  // dashboards dos menus de gestão
+  const dg = await call('GET', 'dash', null, { t: 'gestao', local: L, dias: 30 }); assert.equal(dg.vendasDia.length, 30); assert.equal(dg.horas.length, 24); assert.ok(dg.k.vendas > 0 && dg.top.length > 0 && dg.familias.length > 0 && dg.meios.length > 0);
+  assert.ok(Math.abs(dg.vendasDia.reduce((a, b) => a + b, 0) - dg.k.vendas) < 1); assert.ok(Math.abs(dg.horas.reduce((a, b) => a + b, 0) - dg.k.vendas) < 1); assert.ok(Math.abs(dg.meios.reduce((a, b) => a + b.v, 0) - dg.k.vendas) < dg.k.vendas * 0.05);
+  const dt = await call('GET', 'dash', null, { t: 'gestao', local: 'todos', dias: 7 }); assert.equal(dt.vendasDia.length, 7); assert.ok(dt.locais.length >= 2);
+  const ds = await call('GET', 'dash', null, { t: 'stock', local: L, dias: 30 }); assert.ok(ds.valor > 0 && ds.itens > 0 && ds.topValor.length > 0 && ds.entradas.length === 30); assert.ok(ds.compras.v > 0); assert.ok(Array.isArray(ds.abaixo));
+  const dp = await call('GET', 'dash', null, { t: 'pessoas', local: L, dias: 30 }); assert.equal(dp.meses.length, 6); assert.ok(dp.nFun > 0 && dp.massa > 0 && dp.receitas[5] > 0 && dp.bancos.length > 0);
+  assert.equal((await raw('GET', 'dash', null, { t: 'xpto', local: L })).status, 400);
   await call('POST', 'demo', { acao: 'apagar' }); st = await call('GET', 'state'); assert.equal(st.bairros.length, 1);
   console.log('OK — imagens, fotografia, taxa de serviço e entregas');
 })().catch((e) => { console.error(e); process.exit(1); });
