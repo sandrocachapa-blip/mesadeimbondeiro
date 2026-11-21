@@ -524,3 +524,33 @@ body.modo-app.tema-luxo .tabs-m { background: rgba(11,10,8,.96); border-top: 1px
 body.sim-on { overflow: hidden; }
 .tema-luxo .sim-bt { background: transparent; border-color: #8C7335; color: #E7D3A1; }
 .sim-d.tel { width: calc(var(--w) + 28px); height: calc(var(--h) + 76px); padding: 46px 14px 30px; } .sim-d.tel::before { top: 13px; height: 22px; width: 96px; margin-left: -48px; } .sim-d.tel::after { content: ''; position: absolute; bottom: 11px; left: 50%; width: 120px; height: 5px; margin-left: -60px; border-radius: 3px; background: #4A4A4F; }
+
+/* ---------- v18: observações rápidas no telemóvel ---------- */
+.ea-o { display: block; margin-top: 5px; max-width: 100%; border: 1px dashed #C9B08C; background: #FCF6EC; color: var(--terra); border-radius: 99px; padding: 5px 11px; font: 600 12.5px var(--texto); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 32px; }
+.ea-o.tem { border-style: solid; border-color: var(--am); background: #FFF6DC; color: #7A5300; }
+.ea { align-items: center; } .ea-t span { display: block; }
+.ep-v { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; gap: 2px; } .ep-v span { font-weight: 700; } .ep-v small { font-size: 13px; color: var(--castanho-2); font-weight: 600; }
+.ep-e .chips { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; -webkit-overflow-scrolling: touch; } .ep-e .chips::-webkit-scrollbar { display: none; } .ep-e .chip { flex: none; }
+.ep-e { scrollbar-width: thin; }
+#modal .cx.folha { max-width: 560px; }
+.fo-h { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; } .fo-h img { width: 64px; height: 48px; object-fit: cover; border-radius: 10px; flex: none; } .fo-h h2 { margin: 0; font-size: 20px; line-height: 1.15; } .fo-h small { color: var(--castanho-2); }
+.fo-ls { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 10px; scrollbar-width: none; } .fo-ls button { flex: none; border: 1px solid var(--linha); background: #fff; border-radius: 10px; padding: 8px 12px; font: 500 13px var(--texto); color: var(--castanho); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .fo-ls button.on { border-color: var(--az); box-shadow: 0 0 0 2px rgba(47,116,192,.25); font-weight: 700; }
+.fo-op { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; } .fo-op button { border-radius: 12px; min-height: 48px; text-align: left; padding: 10px 12px; font-size: 14px; }
+.fo-l { margin-top: 10px; min-height: 48px; font-size: 16px; }
+.fo-q { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: #F3E9D8; } .fo-q span { font-weight: 600; font-size: 14px; } .fo-q small { grid-column: 1 / -1; color: var(--castanho-2); } .fo-q .qt button { width: 44px; height: 44px; }
+.fo-b { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 14px; } .fo-b .btn { min-height: 52px; font-size: 16px; } .fo-b .btn.p { background: linear-gradient(180deg, #35AD60, var(--vd)); border-color: var(--vd2); box-shadow: 0 3px 0 var(--vd2); }
+@media (max-width: 760px) {
+  #modal:has(.cx.folha) { align-items: flex-end; padding: 0; }
+  #modal .cx.folha { max-width: none; border-radius: 22px 22px 0 0; border-width: 0; border-top: 2px solid var(--castanho); max-height: 90vh; padding: 14px 14px calc(14px + env(safe-area-inset-bottom)); animation: sobe .18s ease-out; }
+  #modal .cx.folha::before { content: ''; display: block; width: 44px; height: 5px; border-radius: 3px; background: #D9C7A8; margin: 0 auto 12px; }
+  .fo-op { grid-template-columns: 1fr 1fr; }
+}
+@keyframes sobe { from { transform: translateY(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+.tema-luxo .ea-o { background: transparent; border-color: #8C7335; color: #E7D3A1; } .tema-luxo .ea-o.tem { border-color: var(--ouro); color: var(--ouro-2); background: rgba(201,169,97,.1); } .tema-luxo .ep-v small { color: #A99C82; }
+.tema-luxo .fo-ls button { background: #14120E; border-color: var(--linha); color: #CFC3A8; } .tema-luxo .fo-q { background: #1A1814; } .tema-luxo .fo-b .btn.p { background: linear-gradient(180deg, #E2CB90, #B8963F); border-color: #B8963F; color: #14110A; box-shadow: none; }
+.ep-arts { grid-template-columns: repeat(auto-fill, minmax(min(270px, 100%), 1fr)); } .ea { min-width: 0; }
+@media (max-width: 760px) { .ep-arts { grid-template-columns: minmax(0, 1fr); } }
+.fo-q { margin: 0 0 12px; }
+.fo-b { position: sticky; bottom: -14px; background: var(--creme); padding: 10px 0 14px; margin-bottom: -14px; z-index: 1; box-shadow: 0 -12px 14px -10px rgba(74,26,12,.25); }
+@media (max-width: 760px) { .fo-op button { min-height: 44px; padding: 8px 10px; font-size: 13.5px; } .fo-op { gap: 6px; } #modal .cx.folha { padding-bottom: 14px; } .fo-b { padding-bottom: calc(14px + env(safe-area-inset-bottom)); } }
+.tema-luxo .fo-b { background: var(--creme); }

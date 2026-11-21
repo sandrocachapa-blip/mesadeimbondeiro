@@ -328,7 +328,7 @@ function artsHtml(p) {
   const emp = rota().v === 'empregado', b = (S.x.busca || '').trim().toLowerCase(), qt = (id) => p.linhas.filter((l) => l.artigo_id === id && l.estado === 'novo').reduce((s, l) => s + l.qtd, 0);
   const naCarta = (a) => { const f = S.st.familias.find((x) => x.id === a.familia_id); return emp || !f || (f.carta === 'vinhos') === (S.x.carta === 'vinhos'); };
   const arts = S.st.artigos.filter((a) => (b ? a.nome.toLowerCase().includes(b) : S.fam === 'fav' ? a.favorito : S.fam === 'todos' ? naCarta(a) : a.familia_id === S.fam)), img = !ls.get('semImg', false);
-  if (emp) return arts.map((a) => { const n = qt(a.id); return `<div class="ea ${n ? 'tem' : ''} ${a.fora ? 'fora' : ''}" data-a="add" data-id="${a.id}" role="button" tabindex="0">${n ? `<em class="ea-n">${n}</em>` : ''}<img src="${esc(imgArt(a))}" alt="" loading="lazy"><div class="ea-t"><b>${esc(a.nome)}</b><span>${a.fora ? 'indisponível' : kz(a.preco)}</span></div>${n ? `<div class="ea-q"><button data-a="empMenos" data-id="${a.id}" aria-label="Menos um">−</button><i>+</i></div>` : (a.fora ? '' : '<i class="ea-p">+</i>')}</div>`; }).join('') || '<p class="mudo">Sem artigos.</p>';
+  if (emp) return arts.map((a) => { const n = qt(a.id); return `<div class="ea ${n ? 'tem' : ''} ${a.fora ? 'fora' : ''}" data-a="add" data-id="${a.id}" role="button" tabindex="0">${n ? `<em class="ea-n">${n}</em>` : ''}<img src="${esc(imgArt(a))}" alt="" loading="lazy"><div class="ea-t"><b>${esc(a.nome)}</b><span>${a.fora ? 'indisponível' : kz(a.preco)}</span>${n ? (() => { const t = obsTxt(p, a.id); return `<button class="ea-o ${t ? 'tem' : ''}" data-a="empObs" data-id="${a.id}">${t ? '✎ ' + esc(t) : '+ Observação'}</button>`; })() : ''}</div>${n ? `<div class="ea-q"><button data-a="empMenos" data-id="${a.id}" aria-label="Menos um">−</button><i>+</i></div>` : (a.fora ? '' : '<i class="ea-p">+</i>')}</div>`; }).join('') || '<p class="mudo">Sem artigos.</p>';
   return arts.map((a) => { const n = qt(a.id); return `<button class="art ${img ? 'ci' : ''} ${n ? 'tem' : ''} ${a.fora ? 'fora' : ''}" data-a="add" data-id="${a.id}">${n ? `<i>${n}</i>` : ''}${img ? `<img src="${esc(imgArt(a))}" alt="" loading="lazy">` : ''}<b>${esc(a.nome)}</b><span>${a.fora ? 'indisponível' : kz(a.preco)}</span></button>`; }).join('') || '<p class="mudo">Sem artigos.</p>';
 }
 
@@ -360,7 +360,7 @@ function vEmp(id) {
       <div class="chips">${chipsFam(st.familias, temFav)}</div><div class="ep-arts" id="arts">${artsHtml(p)}</div></div>
     <aside class="ep-conta"><h3>Pedido · ${esc(p.mesa_nome)}</h3><div class="pdv-l">${linhasHtml(p)}</div><div class="pdv-t">${totaisHtml(p)}</div>
       <div class="fila" style="margin-top:12px"><button class="btn s" data-a="consulta" data-id="${p.id}">Consulta de mesa</button><button class="btn s" data-a="transferir" data-id="${p.id}">Mudar de mesa</button>${pode('pagar') ? `<button class="btn s" data-a="receber" data-id="${p.id}" ${p.linhas.length ? '' : 'disabled'}>Receber</button>` : ''}</div></aside></div>
-    <footer class="ep-f"><button class="btn" data-a="verConta">${S.x.verConta ? '← Artigos' : 'Ver pedido · ' + itens + ' · ' + kz(p.total)}</button><button class="btn p" data-a="enviar" data-id="${p.id}" ${novos ? '' : 'disabled'}>${ICO.enviar}Enviar${novos ? ' (' + novos + ')' : ''}</button></footer></div>`;
+    <footer class="ep-f"><button class="btn ep-v" data-a="verConta">${S.x.verConta ? '← Artigos' : `<span>Ver pedido · ${itens}</span><small>${kz(p.total)}</small>`}</button><button class="btn p" data-a="enviar" data-id="${p.id}" ${novos ? '' : 'disabled'}>${ICO.enviar}Enviar${novos ? ' (' + novos + ')' : ''}</button></footer></div>`;
 }
 function mReceber(id) {
   const p = P(id); if (!p) return fechar();
@@ -398,6 +398,21 @@ function mObs() {
     <label>Outra observação</label><input id="obsLivre" value="${esc(o.livre || '')}" placeholder="Escreva aqui o que não estiver na lista" autocomplete="off">
     <div class="fila" style="margin-top:16px"><button class="btn s" data-a="obsLimpa">Limpar</button><span class="esp"></span><button class="btn" data-a="fechar">Cancelar</button><button class="btn p" data-a="obsOk">Guardar obs.</button></div>`, 'larga');
 }
+/* Observações no telemóvel: folha de baixo a partir do cartão do artigo, com escolha de quantas unidades levam a observação */
+function mObsArt() {
+  const o = S.x.oa, p = P(o.pid), a = p && S.st.artigos.find((x) => x.id === o.aid); if (!p || !a) return fechar();
+  const ls_ = p.linhas.filter((l) => l.artigo_id === a.id && l.estado === 'novo'); if (!ls_.length) return fechar();
+  if (!ls_.some((l) => l.id === o.lid)) o.lid = (ls_.find((l) => !l.notas) || ls_[0]).id;
+  const l = ls_.find((x) => x.id === o.lid), ops = obsOpcoes(l.seccao);
+  if (o.ini !== l.id) { const partes = (l.notas || '').split(',').map((x) => x.trim()).filter(Boolean); o.sel = partes.filter((x) => ops.includes(x)); o.livre = partes.filter((x) => !ops.includes(x)).join(', '); o.qtd = l.qtd; o.ini = l.id; }
+  modal(`<div class="fo-h"><img src="${esc(imgArt(a))}" alt=""><div><h2>${esc(a.nome)}</h2><small>Observações para ${l.seccao === 'bar' ? 'o bar' : 'a cozinha'}</small></div></div>
+    ${ls_.length > 1 ? `<div class="fo-ls">${ls_.map((x) => `<button class="${x.id === l.id ? 'on' : ''}" data-a="oaLinha" data-id="${x.id}"><b>${x.qtd}×</b> ${x.notas ? esc(x.notas) : 'sem observações'}</button>`).join('')}</div>` : ''}
+    ${l.qtd > 1 ? `<div class="fo-q"><span>Quantas unidades levam esta observação?</span><div class="qt"><button data-a="oaQ" data-d="-1">−</button><b>${o.qtd}</b><button data-a="oaQ" data-d="1">+</button></div><small>${o.qtd < l.qtd ? (l.qtd - o.qtd === 1 ? 'A outra fica sem esta observação.' : 'As outras ' + (l.qtd - o.qtd) + ' ficam sem esta observação.') : 'Todas as ' + l.qtd + ' unidades.'}</small></div>` : ''}
+    <div class="obs-op fo-op">${ops.map((v) => `<button class="${o.sel.includes(v) ? 'on' : ''}" data-a="oaTroca" data-v="${esc(v)}">${o.sel.includes(v) ? '✓ ' : ''}${esc(v)}</button>`).join('')}</div>
+    <input id="obsLivre" class="fo-l" value="${esc(o.livre || '')}" placeholder="Outra observação (escrever)…" autocomplete="off">
+    <div class="fo-b"><button class="btn" data-a="oaLimpa">Limpar</button><button class="btn p" data-a="oaOk">Guardar${o.sel.length || o.livre ? '' : ' sem obs.'}</button></div>`, 'folha');
+}
+function obsTxt(p, aid) { const ns = p.linhas.filter((l) => l.artigo_id === aid && l.estado === 'novo' && l.notas); return ns.length ? ns.map((l) => (ns.length > 1 || p.linhas.filter((x) => x.artigo_id === aid && x.estado === 'novo').length > 1 ? l.qtd + '× ' : '') + l.notas).join(' · ') : ''; }
 /* Retirar produtos do menu temporariamente (por local): somem do menu digital e ficam bloqueados nos pedidos */
 function mDisp() {
   const st = S.st, sec = S.x.dispSec, fams = st.familias.filter((f) => !sec || f.seccao === sec), n = st.artigos.filter((a) => a.fora).length;
@@ -627,6 +642,17 @@ const ACOES = {
   empAbrir: (el) => { S.x.verConta = false; S.x.busca = ''; ir('empregado/' + el.dataset.id); },
   empNova: (el) => { S.x.verConta = false; S.x.busca = ''; const id = uuid(); if (op('pedido.abrir', { id, local_id: S.local, tipo: el.dataset.t })) ir('empregado/' + id); },
   empVoltar: () => { S.x.verConta = false; S.x.busca = ''; ir('empregado'); },
+  empObs: (el) => { const p = P(rota().id); if (!p) return; S.x.oa = { pid: p.id, aid: el.dataset.id }; mObsArt(); },
+  oaLinha: (el) => { S.x.oa.livre = $('#obsLivre').value; S.x.oa.lid = el.dataset.id; S.x.oa.ini = null; mObsArt(); },
+  oaTroca: (el) => { const o = S.x.oa, v = el.dataset.v, k = o.sel.indexOf(v); o.livre = $('#obsLivre').value; if (k >= 0) o.sel.splice(k, 1); else o.sel.push(v); mObsArt(); },
+  oaQ: (el) => { const o = S.x.oa, [, l] = linhaDe(o.lid); if (!l) return; o.livre = $('#obsLivre').value; o.qtd = Math.min(l.qtd, Math.max(1, o.qtd + Number(el.dataset.d))); mObsArt(); },
+  oaLimpa: () => { S.x.oa.sel = []; S.x.oa.livre = ''; mObsArt(); },
+  oaOk: () => { const o = S.x.oa, [p, l] = linhaDe(o.lid); if (!l) return fechar(); const lv = $('#obsLivre').value.trim(), notas = o.sel.concat(lv ? [lv] : []).join(', ');
+    if (notas !== (l.notas || '') || o.qtd < l.qtd) {
+      if (o.qtd < l.qtd && notas !== (l.notas || '')) { op('linha.qtd', { id: l.id, qtd: l.qtd - o.qtd }); op('linha.add', { id: uuid(), pedido_id: p.id, artigo_id: l.artigo_id, qtd: o.qtd, notas }); }
+      else op('linha.qtd', { id: l.id, qtd: l.qtd, notas });
+      toast(notas ? 'Observação guardada: ' + notas : 'Observação retirada'); }
+    fechar(); render(); },
   empZona: (el) => { S.x.empZona = el.dataset.id; render(); },
   empMenos: (el) => { const p = P(rota().id); if (!p) return; const ls = p.linhas.filter((x) => x.artigo_id === el.dataset.id && x.estado === 'novo'), l = ls.filter((x) => !x.notas).pop() || ls.pop(); if (l) { op('linha.qtd', { id: l.id, qtd: l.qtd - 1 }); render(); } },
   desconto: (el) => { const p = P(el.dataset.id); form('Desconto na conta', [{ k: 'valor', label: 'Valor do desconto (Kz)', type: 'number', value: p.desconto || '' }], (v) => { op('pedido.desconto', { pedido_id: p.id, valor: Math.max(0, Number(v.valor) || 0) }); render(); }); },
