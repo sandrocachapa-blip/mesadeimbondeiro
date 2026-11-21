@@ -21,6 +21,7 @@
   .a { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px dashed #E2CFB2; }
   .a div { flex: 1; } .a b { display: block; } .a small { color: #6B3A26; }
   .a span { font-weight: 700; white-space: nowrap; }
+  #capa img { width: 100%; height: 190px; object-fit: cover; border-radius: 16px; display: block; margin-bottom: 14px; } .luxo #capa img { border-radius: 2px; border: 1px solid #8C7335; } .imp #capa { display: none; }
   .a img.fi { width: 84px; height: 63px; object-fit: cover; border-radius: 10px; flex: none; background: #F1E4CF; } .luxo .a img.fi { border-radius: 2px; background: #14110A; }
   #alerta img { width: 64px; height: 64px; border-radius: 12px; float: left; margin-right: 12px; background: #F6EAD6; }
   .imp #btRes, .imp #cartas, .imp #nav, .imp #msg, .imp #cesto, .imp .q { display: none !important; } .imp .a img.fi { width: 60px; height: 45px; } .imp .a { break-inside: avoid; } .imp h2 { break-after: avoid; }
@@ -80,6 +81,7 @@
 <body>
 <script>try { if (localStorage.getItem('mdi.tema') === 'luxo') document.body.classList.add('luxo'); } catch (e) {}</script>
 <div class="w">
+  <div id="capa"></div>
   <header><img src="/logo.png" alt="Mesa de Imbondeiro"><p id="local"></p></header>
   <div id="cartas"></div>
   <nav id="nav"></nav>
@@ -188,6 +190,7 @@ fetch('/api/menu?l=' + encodeURIComponent(l) + (mesaId ? '&m=' + encodeURICompon
   M = m; document.body.classList.toggle('luxo', m.tema === 'luxo'); try { localStorage.setItem('mdi.tema', m.tema || ''); } catch (e) {}
   el('local').textContent = m.local + (m.mesa ? ' · ' + m.mesa.nome : '') + (m.morada ? ' · ' + m.morada : '');
   if (m.mesa) el('msg').innerHTML = '<div class="ok">Pode pedir a partir daqui: toque em + nos artigos e envie o pedido.</div>';
+  if (m.capa) el('capa').innerHTML = '<img src="' + esc(m.capa) + '" alt="">';
   if (m.taxa_servico > 0) document.querySelector('footer').textContent += ' Ao consumo nas mesas acresce ' + m.taxa_servico + '% de taxa de serviço.';
   if (IMP) { document.body.classList.add('imp'); document.body.classList.remove('luxo'); }
   desenha(); segue();

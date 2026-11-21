@@ -41,7 +41,7 @@ async function api(path, o) {
 
 /* ---------- Sincronização ---------- */
 let aSincronizar = false;
-const VIVAS = ['mesas', 'pedido', 'cozinha', 'bar', 'servir', 'entregas'];
+const VIVAS = ['mesas', 'pedido', 'cozinha', 'bar', 'servir', 'entregas', 'empregado'];
 async function sync() {
   if (!S.token || aSincronizar) return;
   aSincronizar = true;
@@ -100,6 +100,7 @@ function aplicar(o) {
       st.pedidos.push({ id: d.id, mesa_id: d.mesa_id || null, mesa_nome: m ? m.nome : ent ? 'Entrega · ' + d.cliente_nome : (d.tipo === 'takeaway' ? 'Take-away' : 'Balcão'), tipo: m ? 'mesa' : d.tipo, aberto_por_nome: S.user.nome, aberto_em: o.ts, cliente_nome: d.cliente_nome || '', cliente_tel: ent ? d.cliente_tel || '' : '', morada: ent ? d.morada || '' : '', bairro: ent ? d.bairro || '' : '', taxa_entrega: ent ? Number(d.taxa_entrega) || 0 : 0, estafeta: '', entrega_estado: ent ? 'preparar' : '', desconto: 0, total: 0, linhas: [], pagamentos: [] });
       break;
     }
+    case 'pedido.cliente': { const p = P(d.pedido_id); if (p) { p.cliente_nome = d.cliente_nome || ''; p.cliente_nif = d.cliente_nif || ''; } break; }
     case 'entrega.estado': { const p = P(d.pedido_id); if (p) { p.entrega_estado = d.estado; if (d.estafeta != null) p.estafeta = d.estafeta; } break; }
     case 'linha.add': {
       const p = P(d.pedido_id), a = st.artigos.find((x) => x.id === d.artigo_id); if (!p || !a) throw new Error('Artigo ou conta em falta');
@@ -151,7 +152,7 @@ function menus() {
   const p = S.user.perfil;
   if (p === 'cozinha') return [{ g: 'Operação', i: [['cozinha', 'Cozinha'], ['equipa', 'Ponto']] }];
   if (p === 'bar') return [{ g: 'Operação', i: [['bar', 'Bar'], ['equipa', 'Ponto']] }];
-  const op = [['mesas', 'Mesas'], ['servir', 'Prontos a servir'], ['cozinha', 'Cozinha'], ['bar', 'Bar'], ['entregas', 'Entregas'], ['reservas', 'Reservas']];
+  const op = p === 'empregado' ? [['empregado', 'Empregado · pedidos'], ['mesas', 'Mesas'], ['servir', 'Prontos a servir'], ['cozinha', 'Cozinha'], ['bar', 'Bar'], ['entregas', 'Entregas'], ['reservas', 'Reservas']] : [['mesas', 'Mesas'], ['empregado', 'Empregado · pedidos'], ['servir', 'Prontos a servir'], ['cozinha', 'Cozinha'], ['bar', 'Bar'], ['entregas', 'Entregas'], ['reservas', 'Reservas']];
   if (pode('pagar')) op.push(['caixa', 'Caixa'], ['facturacao', 'Facturação']);
   op.push(['clientes', 'Clientes']);
   const g = [{ g: 'Operação', i: op }];
@@ -162,7 +163,7 @@ function menus() {
   return g;
 }
 const VIEWS = {};
-const TABI = {"mesas": "<svg viewBox=\"0 0 24 24\"><rect x=\"4\" y=\"5\" width=\"16\" height=\"4\" rx=\"1.5\"/><path d=\"M7 9v10M17 9v10\"/></svg>", "servir": "<svg viewBox=\"0 0 24 24\"><path d=\"M3 18h18M5 18a7 7 0 0 1 14 0M12 8V6\"/></svg>", "entregas": "<svg viewBox=\"0 0 24 24\"><path d=\"M3 7h11v9H3zM14 10h4l3 3v3h-7z\"/><circle cx=\"7\" cy=\"18\" r=\"2\"/><circle cx=\"17\" cy=\"18\" r=\"2\"/></svg>", "mais": "<svg viewBox=\"0 0 24 24\"><path d=\"M4 7h16M4 12h16M4 17h16\"/></svg>"};
+const TABI = {"empregado": "<svg viewBox=\"0 0 24 24\"><rect x=\"5\" y=\"3\" width=\"14\" height=\"18\" rx=\"2\"/><path d=\"M9 8h6M9 12h6M9 16h3\"/></svg>", "mesas": "<svg viewBox=\"0 0 24 24\"><rect x=\"4\" y=\"5\" width=\"16\" height=\"4\" rx=\"1.5\"/><path d=\"M7 9v10M17 9v10\"/></svg>", "servir": "<svg viewBox=\"0 0 24 24\"><path d=\"M3 18h18M5 18a7 7 0 0 1 14 0M12 8V6\"/></svg>", "entregas": "<svg viewBox=\"0 0 24 24\"><path d=\"M3 7h11v9H3zM14 10h4l3 3v3h-7z\"/><circle cx=\"7\" cy=\"18\" r=\"2\"/><circle cx=\"17\" cy=\"18\" r=\"2\"/></svg>", "mais": "<svg viewBox=\"0 0 24 24\"><path d=\"M4 7h16M4 12h16M4 17h16\"/></svg>"};
 function sair(silencioso) { S.token = ''; S.user = null; ls.del('token'); ls.del('user'); if (!silencioso) { S.st = null; ls.del('state'); } render(); }
 
 function render() {
@@ -173,7 +174,7 @@ function render() {
   if (!S.st) { app.innerHTML = '<div class="login"><div class="cx"><img src="/logo.png" alt=""><p>A carregar…</p><p class="mudo">Na primeira utilização é precisa ligação à internet.</p></div></div>'; return; }
   const gs = menus(), todos = gs.flatMap((g) => g.i), r = rota();
   if (!todos.some((m) => m[0] === r.v) && r.v !== 'pedido') { location.hash = todos[0][0]; return; }
-  const on = r.v === 'pedido' ? 'mesas' : r.v;
+  const on = r.v === 'pedido' ? 'mesas' : r.v, empPed = r.v === 'empregado' && !!(r.id && P(r.id));
   let corpo = '';
   try { corpo = VIEWS[r.v](r.id); } catch (e) { corpo = '<div class="aviso">Erro a mostrar este ecrã: ' + esc(e.message) + '</div>'; console.error(e); }
   const lado = $('.lado nav'), sc = lado ? lado.scrollTop : 0;
@@ -183,15 +184,15 @@ function render() {
       return `<div class="grp ${ab ? 'ab' : ''} ${tem ? 'act' : ''}"><button class="gh" data-a="grp" data-g="${k}" data-ab="${ab ? 1 : 0}"><span>${g.g}</span><i>▾</i></button><div class="sub">${g.i.map((m) => `<a href="#${m[0]}" class="${m[0] === on ? 'on' : ''}">${m[1]}</a>`).join('')}</div></div>`; }).join('')}</nav></aside>
     <div class="vela" data-a="ham"></div>
     <div class="corpo"><header class="topo"><button class="ham" data-a="ham" aria-label="Menu">☰</button><b class="tit">${esc((todos.find((m) => m[0] === on) || ['', ''])[1])}</b><span class="esp"></span><span id="estado" class="pill"></span><button class="eu" data-a="eu">${esc(S.user.nome.split(' ')[0])} ▾</button></header><main>${corpo}</main></div>
-    ${pode('pedir') && r.v !== 'pedido' ? `<nav class="tabs-m">${[['mesas', 'Mesas'], ['servir', 'Prontos'], ['entregas', 'Entregas']].map((t) => `<a href="#${t[0]}" class="${on === t[0] ? 'on' : ''}">${TABI[t[0]]}<span>${t[1]}</span>${t[0] === 'servir' && prontosIds().length ? `<i>${prontosIds().length}</i>` : ''}</a>`).join('')}<button data-a="ham">${TABI.mais}<span>Mais</span></button></nav>` : ''}`;
-  document.body.classList.toggle('com-tabs', pode('pedir') && r.v !== 'pedido');
+    ${pode('pedir') && r.v !== 'pedido' && !empPed ? `<nav class="tabs-m">${[['empregado', 'Pedir'], ['servir', 'Prontos'], ['entregas', 'Entregas']].map((t) => `<a href="#${t[0]}" class="${on === t[0] ? 'on' : ''}">${TABI[t[0]]}<span>${t[1]}</span>${t[0] === 'servir' && prontosIds().length ? `<i>${prontosIds().length}</i>` : ''}</a>`).join('')}<button data-a="ham">${TABI.mais}<span>Mais</span></button></nav>` : ''}`;
+  document.body.classList.toggle('com-tabs', pode('pedir') && r.v !== 'pedido' && !empPed); document.body.classList.toggle('emp-ped', empPed);
   if (sc) $('.lado nav').scrollTop = sc;
   pintarEstado();
 }
 
 /* ---------- Ecrãs ---------- */
 function vLogin() {
-  return `<div class="login"><form class="cx cartao" id="fLogin"><img src="/logo.png" alt="Mesa de Imbondeiro"><p class="mudo">Gestão de restaurantes e bares</p>
+  return `<div class="login foto"><form class="cx cartao" id="fLogin"><img src="/logo.png" alt="Mesa de Imbondeiro"><p class="mudo">Gestão de restaurantes e bares</p>
     <label style="text-align:left">Utilizador</label><input name="login" autocomplete="username" autocapitalize="none" required>
     <label style="text-align:left">Palavra-passe</label><input name="password" type="password" autocomplete="current-password" required>
     <button class="btn p" style="width:100%;margin-top:16px">Entrar</button></form></div>`;
@@ -252,51 +253,99 @@ function vMesas() {
     : zonas.map((z) => `<h3 class="zona">${esc(z)}</h3><div class="grelha">${vis.filter((m) => m.zona === z).map(cartao).join('')}</div>`).join('')}`;
 }
 
+const IC = (d) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const ICO = { volta: IC('<path d="M15 6l-6 6 6 6"/>'), desconto: IC('<path d="M19 5L5 19"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>'), obs: IC('<path d="M4 5h16v11H9l-5 4z"/>'),
+  imp: IC('<path d="M7 9V4h10v5M7 17H5a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M7 14h10v6H7z"/>'), moto: IC('<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>'),
+  enviar: IC('<path d="M4 12l16-8-6 16-3-6z"/>'), pagar: IC('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>'), user: IC('<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>'),
+  cesto: IC('<path d="M4 6h2l2 10h9l2-7H7"/><circle cx="9.5" cy="19" r="1.3"/><circle cx="16.5" cy="19" r="1.3"/>'), troca: IC('<path d="M4 8h14l-3-3M20 16H6l3 3"/>'), mais: IC('<path d="M12 5v14M5 12h14"/>'),
+  mesa: IC('<rect x="4" y="5" width="16" height="4" rx="1.5"/><path d="M7 9v10M17 9v10"/>'), sobe: IC('<path d="M12 19V5M6 11l6-6 6 6"/>'), desce: IC('<path d="M12 5v14M6 13l6 6 6-6"/>'), cofre: IC('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16"/>'), saldo: IC('<rect x="3" y="7" width="18" height="12" rx="2"/><path d="M16 13h2"/>') };
+const tecla = (k) => `<kbd>${k}</kbd>`;
+function linhasHtml(p) {
+  const ls = p.linhas.filter((l) => !AUTO.includes(l.seccao));
+  return ls.length ? ls.map((l) => `<div class="lin ${l.estado}">
+      ${l.estado === 'novo' ? `<div class="qt"><button data-a="menos" data-id="${l.id}">−</button><b>${l.qtd}</b><button data-a="mais" data-id="${l.id}">+</button></div>` : `<b class="qx">${l.qtd} ×</b>`}
+      <div class="n">${esc(l.nome)}<small><span class="est ${l.estado}">${ESTADOS[l.estado]}</span>${l.criado_por_nome === 'Cliente (QR)' && l.estado === 'novo' ? ' pedido pelo cliente' : ''}</small>${l.notas ? `<span class="obs-t">Obs.: ${esc(l.notas)}</span>` : ''}${l.estado === 'novo' ? `<button class="obs-b" data-a="nota" data-id="${l.id}">${l.notas ? 'Alterar obs.' : '+ Observação'}</button>` : ''}</div>
+      <span class="v">${kz(l.preco * l.qtd)}</span>
+      ${l.estado === 'novo' ? `<button class="tira" data-a="tirar" data-id="${l.id}" title="Tirar da conta">−</button>` : (l.estado !== 'anulado' && pode('aprovar') ? `<button class="tira" data-a="anularL" data-id="${l.id}" title="Anular linha">×</button>` : '<span class="tira0"></span>')}
+    </div>`).join('') : '<p class="mudo vazio">Toque nos artigos para os juntar à conta.</p>';
+}
+function totaisHtml(p) {
+  const base = p.linhas.filter((l) => !AUTO.includes(l.seccao) && l.estado !== 'anulado').reduce((s, l) => s + l.preco * l.qtd, 0), autos = p.linhas.filter((l) => AUTO.includes(l.seccao) && l.estado !== 'anulado'), pg = pago(p);
+  return `<div class="tot-l"><span>Subtotal</span><span>${kz(base)}</span></div>
+    ${autos.map((l) => `<div class="tot-l"><span>${esc(l.nome)}${l.qtd > 1 ? ' × ' + l.qtd : ''}${pode('aprovar') ? ` <button class="xz" data-a="anularL" data-id="${l.id}" title="Dispensar esta taxa">×</button>` : ''}</span><span>${kz(l.preco * l.qtd)}</span></div>`).join('')}
+    ${p.desconto ? `<div class="tot-l"><span>Desconto</span><span>− ${kz(p.desconto)}</span></div>` : ''}
+    <div class="tot-l g"><span>Total</span><span>${kz(p.total)}</span></div>
+    ${pg ? `<div class="tot-l"><span>Recebido</span><span>${kz(pg)}</span></div><div class="tot-l"><b>Em falta</b><b>${kz(Math.max(0, p.total - pg))}</b></div>` : ''}`;
+}
+const chipsFam = (fams, temFav) => `${temFav ? `<button class="chip fav ${S.fam === 'fav' ? 'on' : ''}" data-a="fam" data-id="fav">★ Favoritos</button>` : ''}<button class="chip ${S.fam === 'todos' ? 'on' : ''}" data-a="fam" data-id="todos">Todos</button>${fams.map((f) => `<button class="chip ${f.id === S.fam ? 'on' : ''}" data-a="fam" data-id="${f.id}">${esc(f.nome)}</button>`).join('')}`;
 function vPedido(id) {
   const st = S.st, p = P(id);
   if (!p) return `<div class="aviso">Esta conta já foi fechada.</div><a class="btn" href="#mesas">Voltar às mesas</a>`;
-  const daCarta = st.familias.filter((f) => (f.carta === 'vinhos') === (S.x.carta === 'vinhos'));
-  const temFav = st.artigos.some((a) => a.favorito);
-  if ((S.fam === 'fav' && !temFav) || (S.fam !== 'fav' && (!S.fam || !daCarta.some((f) => f.id === S.fam)))) S.fam = temFav && !S.fam ? 'fav' : (daCarta[0] || st.familias[0] || {}).id;
-  const novos = p.linhas.filter((l) => l.estado === 'novo').length, pg = pago(p), bruto = p.total + (p.desconto || 0), itens = p.linhas.filter((l) => l.estado !== 'anulado').reduce((s, l) => s + l.qtd, 0);
-  return `<div class="cab"><a class="btn s" href="#mesas">← Mesas</a><h1>${esc(p.mesa_nome)}</h1><span class="mudo">aberta por ${esc(p.aberto_por_nome)} às ${hora(p.aberto_em)}</span></div>
-  ${p.tipo === 'entrega' ? `<div class="aviso ferr" style="margin-bottom:10px"><b>Entrega ao domicílio</b> · ${esc(p.cliente_nome)}${p.cliente_tel ? ' · <a href="tel:' + esc(p.cliente_tel) + '">' + esc(p.cliente_tel) + '</a>' : ''}<br>${esc([p.bairro, p.morada].filter(Boolean).join(' · ')) || 'sem morada'}${p.estafeta ? ' · estafeta: ' + esc(p.estafeta) : ''} · <a href="#entregas">ver quadro de entregas</a></div>` : ''}
-  <div class="pedido ${S.x.verConta ? 'vc' : ''}"><div class="carta">
-    <div class="fila" style="margin-bottom:8px;flex-wrap:nowrap"><input id="busca" type="search" placeholder="Procurar artigo…" value="${esc(S.x.busca || '')}" autocomplete="off"><button class="btn s" data-a="disp" style="white-space:nowrap">Indisponíveis${st.artigos.some((a) => a.fora) ? ' (' + st.artigos.filter((a) => a.fora).length + ')' : ''}</button><button class="btn s" data-a="semImg" style="white-space:nowrap" title="Mostrar ou esconder as imagens">${ls.get('semImg', false) ? 'Com imagens' : 'Só texto'}</button></div>
+  const daCarta = st.familias.filter((f) => (f.carta === 'vinhos') === (S.x.carta === 'vinhos')), temFav = st.artigos.some((a) => a.favorito);
+  if (!(S.fam === 'todos' || (S.fam === 'fav' && temFav) || daCarta.some((f) => f.id === S.fam))) S.fam = temFav && !S.fam ? 'fav' : (daCarta[0] || st.familias[0] || {}).id;
+  const novos = p.linhas.filter((l) => l.estado === 'novo').length, itens = p.linhas.filter((l) => l.estado !== 'anulado' && !AUTO.includes(l.seccao)).reduce((s, l) => s + l.qtd, 0), nFora = st.artigos.filter((a) => a.fora).length;
+  return `<div class="pedido pdv ${S.x.verConta ? 'vc' : ''}"><div class="carta pdv-e">
+    <div class="pdv-b"><a class="btn az" href="#mesas">${ICO.volta}Voltar</a><input id="busca" type="search" placeholder="(F4) Procurar artigo…" value="${esc(S.x.busca || '')}" autocomplete="off"><button class="btn" data-a="disp">Indisponíveis${nFora ? ' (' + nFora + ')' : ''}</button><button class="btn" data-a="semImg" title="Mostrar ou esconder as imagens">${ls.get('semImg', false) ? 'Com imagens' : 'Só texto'}</button></div>
     <div class="seg" style="margin-bottom:8px"><button class="${S.x.carta !== 'vinhos' ? 'on' : ''}" data-a="carta" data-c="menu">Menu</button><button class="${S.x.carta === 'vinhos' ? 'on' : ''}" data-a="carta" data-c="vinhos">Vinhos e bebidas alcoólicas</button></div>
-    <div class="chips">${temFav ? `<button class="chip fav ${S.fam === 'fav' ? 'on' : ''}" data-a="fam" data-id="fav">★ Favoritos</button>` : ''}${st.familias.filter((f) => (f.carta === 'vinhos') === (S.x.carta === 'vinhos')).map((f) => `<button class="chip ${f.id === S.fam ? 'on' : ''}" data-a="fam" data-id="${f.id}">${esc(f.nome)}</button>`).join('')}</div>
+    <div class="chips">${chipsFam(daCarta, temFav)}</div>
     <div class="arts" id="arts">${artsHtml(p)}</div>
   </div>
-  <div class="cartao conta">
-    ${p.linhas.length ? p.linhas.map((l) => `<div class="lin ${l.estado}">
-      ${l.estado === 'novo' ? `<div class="qt"><button data-a="menos" data-id="${l.id}">−</button><b>${l.qtd}</b><button data-a="mais" data-id="${l.id}">+</button></div>` : `<b>${l.qtd}×</b>`}
-      <div class="n">${esc(l.nome)}<small>${AUTO.includes(l.seccao) && l.estado !== 'anulado' ? '<span class="est">juntada automaticamente</span>' : `<span class="est ${l.estado}">${ESTADOS[l.estado]}</span>`}${l.criado_por_nome === 'Cliente (QR)' && l.estado === 'novo' ? ' pedido pelo cliente' : ''}</small>${l.notas ? `<span class="obs-t">Obs.: ${esc(l.notas)}</span>` : ''}${l.estado === 'novo' ? `<button class="obs-b" data-a="nota" data-id="${l.id}">${l.notas ? 'Alterar obs.' : '+ Obs. (bem passado, sem batata…)'}</button>` : ''}</div>
-      <span class="v">${kz(l.preco * l.qtd)}</span>
-      ${l.estado === 'novo' ? '' : (l.estado !== 'anulado' && pode('aprovar') ? `<button class="btn s perigo" data-a="anularL" data-id="${l.id}">Anular</button>` : '')}
-    </div>`).join('') : '<p class="mudo">Toque nos artigos para os juntar à conta.</p>'}
-    <div style="margin-top:10px">
-      ${p.desconto ? `<div class="tot-l"><span>Subtotal</span><span>${kz(bruto)}</span></div><div class="tot-l"><span>Desconto</span><span>− ${kz(p.desconto)}</span></div>` : ''}
-      <div class="tot-l g"><span>Total</span><span>${kz(p.total)}</span></div>
-      ${pg ? `<div class="tot-l"><span>Recebido</span><span>${kz(pg)}</span></div><div class="tot-l"><b>Em falta</b><b>${kz(Math.max(0, p.total - pg))}</b></div>` : ''}
+  <div class="conta pdv-d">
+    <header class="pdv-h">${ICO.mesa}<b>${esc(p.mesa_nome)}</b><span>${hora(p.aberto_em)}</span><span class="esp"></span>${pode('aprovar') ? `<button class="pdv-x" data-a="anularP" data-id="${p.id}">Anular conta</button>` : ''}</header>
+    <div class="pdv-s"><button data-a="cliente" data-id="${p.id}">${ICO.user}<span>${p.cliente_nome ? esc(p.cliente_nome) + (p.cliente_nif ? ' · NIF ' + esc(p.cliente_nif) : '') : 'Cliente'}</span></button><div>${ICO.user}<span>${esc(p.aberto_por_nome)}</span></div></div>
+    ${p.tipo === 'entrega' ? `<div class="pdv-ent"><b>Entrega</b> · ${esc([p.bairro, p.morada].filter(Boolean).join(' · ')) || 'sem morada'}${p.cliente_tel ? ' · <a href="tel:' + esc(p.cliente_tel) + '">' + esc(p.cliente_tel) + '</a>' : ''}${p.estafeta ? ' · estafeta: ' + esc(p.estafeta) : ''} · <a href="#entregas">quadro de entregas</a></div>` : ''}
+    <div class="pdv-s"><button class="az" data-a="transferir" data-id="${p.id}">${ICO.troca}<span>Mudar de mesa</span>${tecla('F9')}</button><button class="vd" data-a="nova" data-t="balcao">${ICO.mais}<span>Conta de balcão</span>${tecla('F2')}</button></div>
+    <div class="pdv-l">${linhasHtml(p)}</div>
+    <div class="pdv-t">${totaisHtml(p)}</div>
+    <div class="pdv-q">
+      <button class="q1" data-a="desconto" data-id="${p.id}" ${pode('aprovar') ? '' : 'disabled'}>${ICO.desconto}<span>Desconto</span>${tecla('F7')}</button>
+      <button class="q2" data-a="obsUlt" data-id="${p.id}">${ICO.obs}<span>Observação</span>${tecla('F3')}</button>
+      <button class="q3" data-a="consulta" data-id="${p.id}">${ICO.imp}<span>Imprimir</span>${tecla('F8')}</button>
+      <button class="q4" data-a="${p.tipo === 'entrega' ? 'irEntregas' : 'entNova'}">${ICO.moto}<span>Entrega</span></button>
     </div>
-    <div class="fila" style="margin-top:12px">
-      <button class="btn p" style="flex:1" data-a="enviar" data-id="${p.id}" ${novos ? '' : 'disabled'}>Enviar pedido${novos ? ' (' + novos + ')' : ''}</button>
-      ${pode('pagar') ? `<button class="btn p" style="flex:1" data-a="receber" data-id="${p.id}" ${p.linhas.length ? '' : 'disabled'}>Receber</button>` : ''}
-    </div>
-    <div class="fila" style="margin-top:8px">
-      <button class="btn s" data-a="consulta" data-id="${p.id}">Consulta de mesa</button>
-      <button class="btn s" data-a="transferir" data-id="${p.id}">Mudar de mesa</button>
-      ${pode('aprovar') ? `<button class="btn s" data-a="desconto" data-id="${p.id}">Desconto</button><button class="btn s perigo" data-a="anularP" data-id="${p.id}">Anular conta</button>` : ''}
-    </div>
+    <div class="pdv-f"><button class="az" data-a="enviar" data-id="${p.id}" ${novos ? '' : 'disabled'}>${ICO.enviar}<span>Enviar pedido${novos ? ' (' + novos + ')' : ''}</span>${tecla('F5')}</button>
+      ${pode('pagar') ? `<button class="vd" data-a="receber" data-id="${p.id}" ${p.linhas.length ? '' : 'disabled'}>${ICO.pagar}<span>Pagamento</span>${tecla('F6')}</button>` : ''}</div>
   </div></div>
   <div class="barra-m"><button class="btn" data-a="verConta">${S.x.verConta ? '← Carta' : 'Conta · ' + itens + ' · ' + kz(p.total)}</button><button class="btn p" data-a="enviar" data-id="${p.id}" ${novos ? '' : 'disabled'}>Enviar${novos ? ' (' + novos + ')' : ''}</button></div>`;
 }
 function artsHtml(p) {
-  const b = (S.x.busca || '').trim().toLowerCase(), qt = (id) => p.linhas.filter((l) => l.artigo_id === id && l.estado === 'novo').reduce((s, l) => s + l.qtd, 0);
-  const arts = S.st.artigos.filter((a) => (b ? a.nome.toLowerCase().includes(b) : (S.fam === 'fav' ? a.favorito : a.familia_id === S.fam))), img = !ls.get('semImg', false);
+  const emp = rota().v === 'empregado', b = (S.x.busca || '').trim().toLowerCase(), qt = (id) => p.linhas.filter((l) => l.artigo_id === id && l.estado === 'novo').reduce((s, l) => s + l.qtd, 0);
+  const naCarta = (a) => { const f = S.st.familias.find((x) => x.id === a.familia_id); return emp || !f || (f.carta === 'vinhos') === (S.x.carta === 'vinhos'); };
+  const arts = S.st.artigos.filter((a) => (b ? a.nome.toLowerCase().includes(b) : S.fam === 'fav' ? a.favorito : S.fam === 'todos' ? naCarta(a) : a.familia_id === S.fam)), img = !ls.get('semImg', false);
+  if (emp) return arts.map((a) => { const n = qt(a.id); return `<div class="ea ${n ? 'tem' : ''} ${a.fora ? 'fora' : ''}" data-a="add" data-id="${a.id}" role="button" tabindex="0">${n ? `<em class="ea-n">${n}</em>` : ''}<img src="${esc(imgArt(a))}" alt="" loading="lazy"><div class="ea-t"><b>${esc(a.nome)}</b><span>${a.fora ? 'indisponível' : kz(a.preco)}</span></div>${n ? `<div class="ea-q"><button data-a="empMenos" data-id="${a.id}" aria-label="Menos um">−</button><i>+</i></div>` : (a.fora ? '' : '<i class="ea-p">+</i>')}</div>`; }).join('') || '<p class="mudo">Sem artigos.</p>';
   return arts.map((a) => { const n = qt(a.id); return `<button class="art ${img ? 'ci' : ''} ${n ? 'tem' : ''} ${a.fora ? 'fora' : ''}" data-a="add" data-id="${a.id}">${n ? `<i>${n}</i>` : ''}${img ? `<img src="${esc(imgArt(a))}" alt="" loading="lazy">` : ''}<b>${esc(a.nome)}</b><span>${a.fora ? 'indisponível' : kz(a.preco)}</span></button>`; }).join('') || '<p class="mudo">Sem artigos.</p>';
 }
 
+/* ---------- Empregado: registo de pedidos no telemóvel ou no tablet ---------- */
+function empCasa() {
+  const st = S.st, vis = mesasVis(), eu = S.user.nome, zonas = [...new Set(vis.map((m) => m.zona))], z = zonas.includes(S.x.empZona) ? S.x.empZona : '';
+  const minhas = st.pedidos.filter((p) => p.aberto_por_nome === eu), nPr = prontosIds().length, soltas = st.pedidos.filter((p) => !p.mesa_id), livres = vis.filter((m) => !st.pedidos.some((p) => p.mesa_id === m.id)).length;
+  const prM = [...new Set(st.pedidos.filter((p) => p.linhas.some((l) => l.estado === 'pronto' && !AUTO.includes(l.seccao))).map((p) => p.mesa_nome))];
+  const cartao = (m) => { const p = st.pedidos.find((x) => x.mesa_id === m.id), cm = corMesa(p), r = !p && resMesa(m);
+    return `<button class="mesa em ${r ? 'res' : ''} ${p ? 'oc ' + cm.cls : ''}" data-a="empMesa" data-id="${m.id}"><b>${esc(m.nome)}</b><span class="mudo">${p ? esc((p.aberto_por_nome || '').split(' ')[0]) + ' · ' + mins(p.aberto_em) + ' min' : r ? 'reservada ' + esc(r.hora) : lug(m) + ' lugares'}</span>${cm.min != null ? `<small class="esp-t">espera ${cm.min} min</small>` : ''}${temQr(p) ? '<span class="est novo">pedido do cliente</span>' : ''}${p ? `<span class="tot">${kz(p.total)}</span>` : '<span class="tot livre">Abrir</span>'}</button>`; };
+  return `<div class="emp"><div class="emp-ola"><div><small>Empregado</small><b>${esc(eu)}</b></div><span class="mudo">${esc(st.local.nome)}</span></div>
+    <div class="emp-k"><div><b>${minhas.length}</b><span>As minhas contas</span></div><a href="#servir" class="${nPr ? 'pr' : ''}"><b>${nPr}</b><span>Prontos a servir</span></a><div><b>${livres}</b><span>Mesas livres</span></div></div>
+    ${nPr ? `<a class="emp-pr" href="#servir"><b>${nPr} artigo(s) pronto(s) a servir</b><span>${prM.map(esc).join(', ')} →</span></a>` : ''}
+    <div class="fila emp-n"><button class="btn" data-a="empNova" data-t="takeaway">+ Take-away</button><button class="btn" data-a="empNova" data-t="balcao">+ Balcão</button><button class="btn" data-a="entNova">+ Entrega</button></div>
+    ${soltas.length ? `<h3 class="zona">Contas sem mesa</h3><div class="grelha emg">${soltas.map((p) => `<button class="mesa em oc ${corMesa(p).cls}" data-a="empAbrir" data-id="${p.id}"><b>${esc(p.mesa_nome)}</b><span class="mudo">${esc((p.aberto_por_nome || '').split(' ')[0])} · ${hora(p.aberto_em)}</span><span class="tot">${kz(p.total)}</span></button>`).join('')}</div>` : ''}
+    <h3 class="zona">Escolha a mesa</h3>
+    <div class="chips"><button class="chip ${z ? '' : 'on'}" data-a="empZona" data-id="">Todas</button>${zonas.map((x) => `<button class="chip ${x === z ? 'on' : ''}" data-a="empZona" data-id="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+    <div class="grelha emg">${vis.filter((m) => !z || m.zona === z).map(cartao).join('')}</div></div>`;
+}
+function vEmp(id) {
+  const st = S.st, p = id && P(id);
+  if (!p) return empCasa();
+  const temFav = st.artigos.some((a) => a.favorito);
+  if (!(S.fam === 'todos' || (S.fam === 'fav' && temFav) || st.familias.some((f) => f.id === S.fam))) S.fam = temFav ? 'fav' : 'todos';
+  const novos = p.linhas.filter((l) => l.estado === 'novo').length, itens = p.linhas.filter((l) => l.estado !== 'anulado' && !AUTO.includes(l.seccao)).reduce((s, l) => s + l.qtd, 0);
+  return `<div class="ep ${S.x.verConta ? 'vc' : ''}">
+    <header class="ep-h"><button data-a="empVoltar" aria-label="Voltar às mesas">${ICO.volta}</button><div><b>${esc(p.mesa_nome)}</b><small>${itens} artigo(s) · ${kz(p.total)}</small></div><button class="ep-cb" data-a="verConta" aria-label="Ver pedido">${ICO.cesto}${novos ? `<i>${novos}</i>` : ''}</button></header>
+    <div class="ep-c"><div class="ep-e"><input id="busca" type="search" placeholder="Procurar artigo…" value="${esc(S.x.busca || '')}" autocomplete="off">
+      <div class="chips">${chipsFam(st.familias, temFav)}</div><div class="ep-arts" id="arts">${artsHtml(p)}</div></div>
+    <aside class="ep-conta"><h3>Pedido · ${esc(p.mesa_nome)}</h3><div class="pdv-l">${linhasHtml(p)}</div><div class="pdv-t">${totaisHtml(p)}</div>
+      <div class="fila" style="margin-top:12px"><button class="btn s" data-a="consulta" data-id="${p.id}">Consulta de mesa</button><button class="btn s" data-a="transferir" data-id="${p.id}">Mudar de mesa</button>${pode('pagar') ? `<button class="btn s" data-a="receber" data-id="${p.id}" ${p.linhas.length ? '' : 'disabled'}>Receber</button>` : ''}</div></aside></div>
+    <footer class="ep-f"><button class="btn" data-a="verConta">${S.x.verConta ? '← Artigos' : 'Ver pedido · ' + itens + ' · ' + kz(p.total)}</button><button class="btn p" data-a="enviar" data-id="${p.id}" ${novos ? '' : 'disabled'}>${ICO.enviar}Enviar${novos ? ' (' + novos + ')' : ''}</button></footer></div>`;
+}
 function mReceber(id) {
   const p = P(id); if (!p) return fechar();
   const falta = Math.max(0, p.total - pago(p)), x = S.x.rec || (S.x.rec = {});
@@ -395,10 +444,13 @@ function vCaixa() {
   const ent = d.movs.filter((m) => m.tipo === 'reforco').reduce((s, m) => s + m.valor, 0), sai = d.movs.filter((m) => m.tipo === 'sangria').reduce((s, m) => s + m.valor, 0);
   const esp = { numerario: t.fundo + v('numerario') + ent - sai, tpa: v('tpa'), express: v('express'), transferencia: v('transferencia') };
   S.x.esperado = esp; S.x.turnoId = t.id;
-  return `<div class="cab"><h1>Caixa</h1><span class="mudo">aberta por ${esc(t.utilizador_nome)} em ${dataHora(t.aberto_em)}</span><span class="esp"></span>
-    <button class="btn" data-a="mov" data-t="reforco">Reforço</button><button class="btn" data-a="mov" data-t="sangria">Sangria</button><button class="btn p" data-a="fecharCaixa">Fechar caixa</button></div>
+  const rec = d.porMeio.reduce((s, m) => s + m.valor, 0);
+  return `<div class="cab"><h1>Controlo de caixa</h1><span class="esp"></span></div>
     ${d.abertas ? `<div class="aviso">Há ${d.abertas} conta(s) ainda aberta(s) neste local.</div>` : ''}
-    <div class="kpis"><div class="cartao kpi">Total recebido<b>${kz(d.porMeio.reduce((s, m) => s + m.valor, 0))}</b></div><div class="cartao kpi">Numerário esperado na gaveta<b>${kz(esp.numerario)}</b></div><div class="cartao kpi">Fundo de caixa<b>${kz(t.fundo)}</b></div></div>
+    <div class="cxr"><div class="cartao cxr-c"><header><h2>Resumo da caixa</h2><span class="cxr-on">● Caixa aberta</span></header><p class="mudo">Aberta em ${dataHora(t.aberto_em)} por ${esc(t.utilizador_nome)}</p>
+      <div class="cxr-l"><div><i class="c1">${ICO.cofre}</i><span>Valor de abertura</span><b>${kz(t.fundo)}</b></div><div><i class="c2">${ICO.sobe}</i><span>Entradas<small>recebido ${kz(rec)}${ent ? ' + reforços ' + kz(ent) : ''}</small></span><b>${kz(rec + ent)}</b></div>
+        <div><i class="c3">${ICO.desce}</i><span>Saídas<small>sangrias</small></span><b>${kz(sai)}</b></div><div><i class="c4">${ICO.saldo}</i><span>Saldo da caixa<small>numerário esperado na gaveta: ${kz(esp.numerario)}</small></span><b>${kz(t.fundo + rec + ent - sai)}</b></div></div>
+      <div class="cxr-b"><button class="vd" data-a="mov" data-t="reforco">+ Adicionar entrada</button><button class="am" data-a="mov" data-t="sangria">− Adicionar saída</button><button class="vm" data-a="fecharCaixa">Fechar caixa</button></div></div></div>
     <div class="duas"><div class="cartao"><h3>Recebido por meio de pagamento</h3><table>${MEIOS.map((m) => `<tr><td>${m[1]}</td><td class="dir">${kz(v(m[0]))}</td></tr>`).join('')}</table></div>
     <div class="cartao"><h3>Reforços e sangrias</h3>${d.movs.length ? `<table>${d.movs.map((m) => `<tr><td>${hora(m.criado_em)}</td><td>${m.tipo === 'sangria' ? 'Sangria' : 'Reforço'}${m.motivo ? ' — ' + esc(m.motivo) : ''}</td><td class="dir">${m.tipo === 'sangria' ? '− ' : '+ '}${kz(m.valor)}</td></tr>`).join('')}</table>` : '<p class="mudo">Sem movimentos.</p>'}</div></div>${ult}`;
 }
@@ -464,7 +516,7 @@ function cfgForm(id) {
       { k: 'preco_local', label: 'Preço só em ' + S.st.local.nome + ' (vazio = igual ao base)', type: 'number', value: (d.precos.find((p) => p.artigo_id === r.id && p.local_id === S.local) || {}).preco }, { k: 'no_menu', label: 'Mostrar no menu digital', type: 'check', value: novo ? true : r.no_menu }, { k: 'favorito', label: 'Favorito — aparece primeiro no ponto de venda', type: 'check', value: !!r.favorito }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
     familias: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'carta', label: 'Aparece em', type: 'select', options: [['menu', 'Menu (comida e bebidas sem álcool)'], ['vinhos', 'Carta de vinhos e bebidas alcoólicas']] }, { k: 'seccao', label: 'Preparada em', type: 'select', options: [['cozinha', 'Cozinha'], ['bar', 'Bar']] }, { k: 'ordem', label: 'Ordem na carta', type: 'number' }, { k: 'activo', label: 'Activa', type: 'check', value: novo ? true : r.activo }],
     mesas: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'zona', label: 'Zona', value: r.zona || 'Sala' }, { k: 'local_id', label: 'Local', type: 'select', options: optLoc, value: r.local_id || S.local }, { k: 'lugares', label: 'Lugares', type: 'number', value: r.lugares || 4 }, { k: 'ordem', label: 'Ordem', type: 'number' }, { k: 'activo', label: 'Activa', type: 'check', value: novo ? true : r.activo }],
-    locais: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'tipo', label: 'Tipo', type: 'select', options: [['restaurante', 'Restaurante'], ['bar', 'Bar'], ['esplanada', 'Esplanada'], ['takeaway', 'Take-away']] }, { k: 'morada', label: 'Morada' }, { k: 'slug', label: 'Endereço do menu (sem espaços)', ph: 'ex.: ilha-de-luanda' }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
+    locais: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'tipo', label: 'Tipo', type: 'select', options: [['restaurante', 'Restaurante'], ['bar', 'Bar'], ['esplanada', 'Esplanada'], ['takeaway', 'Take-away']] }, { k: 'morada', label: 'Morada' }, { k: 'slug', label: 'Endereço do menu (sem espaços)', ph: 'ex.: ilha-de-luanda' }, { k: 'imagem', label: 'Imagem de capa do menu digital', type: 'select', options: [['', 'Sem imagem'], ['/foto/esplanada.jpg', 'Esplanada'], ['/foto/terraco-sobre-o-mar.jpg', 'Terraço sobre o mar'], ['/foto/sala-da-trattoria.jpg', 'Sala interior'], ['/foto/balcao-da-grelha.jpg', 'Balcão da grelha'], ['/foto/patio-do-cafe.jpg', 'Pátio do café'], ['/foto/rooftop-ao-anoitecer.jpg', 'Rooftop ao anoitecer']] }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
     utilizadores: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'login', label: 'Nome de utilizador', req: 1 }, { k: 'perfil', label: 'Perfil', type: 'select', options: Object.entries(PERFIS) }, { k: 'local_id', label: 'Local', type: 'select', options: [['', 'Todos os locais']].concat(optLoc) }, { k: 'password', label: novo ? 'Palavra-passe (mín. 6 caracteres)' : 'Nova palavra-passe (vazio = manter)', type: 'password' }, { k: 'activo', label: 'Activo', type: 'check', value: novo ? true : r.activo }],
     empresa: [{ k: 'nome', label: 'Nome', req: 1 }, { k: 'nif', label: 'NIF' }, { k: 'regime_iva', label: 'Regime de IVA', type: 'select', options: [['geral', 'Geral'], ['simplificado', 'Simplificado'], ['exclusao', 'Exclusão']] }, { k: 'taxa_iva', label: 'Taxa de IVA incluída nos preços (%) — confirme com o contabilista', type: 'number' }, { k: 'factura_software', label: 'Software de facturação certificado a ligar', ph: 'ex.: Primavera' }, { k: 'inss_taxa', label: 'Segurança Social a cargo do trabalhador (%) — confirme com o contabilista', type: 'number' }, { k: 'emb_preco', label: 'Preço da embalagem de take-away (Kz) — 0 para não cobrar', type: 'number' }, { k: 'emb_modo', label: 'Cobrar a embalagem', type: 'select', options: [['prato', 'Por cada prato da cozinha'], ['pedido', 'Uma vez por pedido']] }, { k: 'taxa_servico', label: 'Taxa de serviço nas contas de mesa (%) — 0 para não cobrar', type: 'number' }, { k: 'obs_cozinha', label: 'Observações rápidas da cozinha, separadas por vírgulas (vazio = lista padrão)', ph: 'Bem passado, Sem batata, Só arroz…' }, { k: 'obs_bar', label: 'Observações rápidas do bar, separadas por vírgulas (vazio = lista padrão)', ph: 'Sem gelo, Com limão…' }, { k: 'tema', label: 'Aspecto da app e do menu digital', type: 'select', options: [['classico', 'Clássico — terracota e creme'], ['luxo', 'Luxo — preto e dourado, para restaurantes de alto nível']] }],
   }[tab].map((c) => (c.value === undefined ? Object.assign(c, { value: r[c.k] }) : c));
@@ -536,12 +588,25 @@ const ACOES = {
   obsOk: () => { const o = S.x.obs, [, l] = linhaDe(o.id); if (l) op('linha.qtd', { id: l.id, qtd: l.qtd, notas: o.sel.concat($('#obsLivre').value.trim() ? [$('#obsLivre').value.trim()] : []).join(', ') }); fechar(); render(); },
   obsLimpa: () => { S.x.obs.sel = []; S.x.obs.livre = ''; mObs(); },
   anularL: (el) => form('Anular linha', [{ k: 'motivo', label: 'Motivo', req: 1 }], (v) => { op('linha.anular', { id: el.dataset.id, motivo: v.motivo }); render(); }),
-  enviar: (el) => { if (op('pedido.enviar', { pedido_id: el.dataset.id })) { toast('Pedido enviado'); S.x.verConta = false; render(); } },
+  enviar: (el) => { const pe = P(el.dataset.id); if (op('pedido.enviar', { pedido_id: el.dataset.id })) { toast('Pedido enviado' + (pe ? ': ' + pe.mesa_nome : '')); S.x.verConta = false; if (rota().v === 'empregado') ir('empregado'); else render(); } },
+  tirar: (el) => { op('linha.qtd', { id: el.dataset.id, qtd: 0 }); render(); },
+  cliente: (el) => { const p = P(el.dataset.id); if (!p) return; form('Cliente da conta', [{ k: 'cliente_nome', label: 'Nome do cliente', value: p.cliente_nome }, { k: 'cliente_nif', label: 'NIF (para a factura)', value: p.cliente_nif }], (v) => { op('pedido.cliente', { pedido_id: p.id, cliente_nome: v.cliente_nome, cliente_nif: v.cliente_nif }); render(); }); },
+  obsUlt: (el) => { const p = P(el.dataset.id), l = p && p.linhas.filter((x) => x.estado === 'novo' && !AUTO.includes(x.seccao)).pop(); if (!l) return toast('Junte primeiro um artigo: a observação fica no último artigo por enviar', 'erro'); ACOES.nota({ dataset: { id: l.id } }); },
+  irEntregas: () => ir('entregas'),
+  empMesa: (el) => { S.x.verConta = false; S.x.busca = ''; const p = S.st.pedidos.find((x) => x.mesa_id === el.dataset.id); if (p) return ir('empregado/' + p.id); const m = S.st.mesas.find((x) => x.id === el.dataset.id), r = m && resMesa(m);
+    const abre = () => { fechar(); const id = uuid(); if (op('pedido.abrir', { id, local_id: S.local, mesa_id: el.dataset.id })) ir('empregado/' + id); };
+    if (!r) return abre(); S.x.empAbre = abre; modal(`<h2>${esc(m.nome)} — reservada</h2><div class="aviso" style="margin-top:10px"><b>${esc(r.hora)} · ${esc(r.cliente_nome)}</b> · ${r.pessoas} pessoa(s)</div><div class="fila" style="margin-top:14px"><button class="btn p" data-a="empAbre">Abrir conta nesta mesa</button><span class="esp"></span><button class="btn" data-a="fechar">Cancelar</button></div>`); },
+  empAbre: () => { const f = S.x.empAbre; delete S.x.empAbre; if (f) f(); },
+  empAbrir: (el) => { S.x.verConta = false; S.x.busca = ''; ir('empregado/' + el.dataset.id); },
+  empNova: (el) => { S.x.verConta = false; S.x.busca = ''; const id = uuid(); if (op('pedido.abrir', { id, local_id: S.local, tipo: el.dataset.t })) ir('empregado/' + id); },
+  empVoltar: () => { S.x.verConta = false; S.x.busca = ''; ir('empregado'); },
+  empZona: (el) => { S.x.empZona = el.dataset.id; render(); },
+  empMenos: (el) => { const p = P(rota().id); if (!p) return; const ls = p.linhas.filter((x) => x.artigo_id === el.dataset.id && x.estado === 'novo'), l = ls.filter((x) => !x.notas).pop() || ls.pop(); if (l) { op('linha.qtd', { id: l.id, qtd: l.qtd - 1 }); render(); } },
   desconto: (el) => { const p = P(el.dataset.id); form('Desconto na conta', [{ k: 'valor', label: 'Valor do desconto (Kz)', type: 'number', value: p.desconto || '' }], (v) => { op('pedido.desconto', { pedido_id: p.id, valor: Math.max(0, Number(v.valor) || 0) }); render(); }); },
   transferir: (el) => { const livres = S.st.mesas.filter((m) => !S.st.pedidos.some((p) => p.mesa_id === m.id)); if (!livres.length) return toast('Não há mesas livres', 'erro'); form('Mudar de mesa', [{ k: 'mesa_id', label: 'Nova mesa', type: 'select', options: livres.map((m) => [m.id, m.zona + ' — ' + m.nome]) }], (v) => { op('pedido.transferir', { pedido_id: el.dataset.id, mesa_id: v.mesa_id }); render(); }); },
   anularP: (el) => form('Anular conta', [{ k: 'motivo', label: 'Motivo', req: 1 }], (v) => { if (P(el.dataset.id).pagamentos.length) { toast('Remova os pagamentos antes de anular a conta', 'erro'); return false; } op('pedido.anular', { pedido_id: el.dataset.id, motivo: v.motivo }); ir('mesas'); }),
   consulta: (el) => consulta(P(el.dataset.id)),
-  receber: (el) => { S.x.rec = {}; mReceber(el.dataset.id); },
+  receber: (el) => { const pr = P(el.dataset.id) || {}; S.x.rec = { nome: pr.cliente_nome || '', nif: pr.cliente_nif || '' }; mReceber(el.dataset.id); },
   pagar: (el) => { const p = P(el.dataset.id), falta = Math.max(0, p.total - pago(p)), v = Number($('#recValor').value) || 0; if (v <= 0) return toast('Indique o valor recebido', 'erro');
     S.x.rec.nome = $('#recNome').value; S.x.rec.nif = $('#recNif').value; S.x.rec.troco = el.dataset.m === 'numerario' && v > falta ? v - falta : 0;
     if (op('pagamento.add', { id: uuid(), pedido_id: p.id, meio: el.dataset.m, valor: Math.min(v, falta) })) mReceber(p.id); render(); },
@@ -604,5 +669,9 @@ window.addEventListener('offline', () => { S.online = false; pintarEstado(); });
 setInterval(() => { if (!document.hidden) sync(); }, 6000);
 setInterval(() => { if (S.token && S.st && ['cozinha', 'bar', 'mesas'].includes(rota().v) && !S.x.editar && !$('#modal').classList.contains('on')) render(); }, 30000);
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
-Object.assign(VIEWS, { mesas: vMesas, pedido: vPedido, cozinha: () => vKds('cozinha'), bar: () => vKds('bar'), caixa: vCaixa, facturacao: vFact, relatorios: vRel, menu: vMenu, config: vCfg, servir: vServir });
+Object.assign(VIEWS, { mesas: vMesas, pedido: vPedido, cozinha: () => vKds('cozinha'), bar: () => vKds('bar'), caixa: vCaixa, facturacao: vFact, relatorios: vRel, menu: vMenu, config: vCfg, servir: vServir, empregado: vEmp });
+const ATALHOS = { F2: '[data-a=nova][data-t=balcao]', F3: '[data-a=obsUlt]', F5: '.pdv-f [data-a=enviar]', F6: '[data-a=receber]', F7: '.pdv-q [data-a=desconto]', F8: '.pdv-q [data-a=consulta]', F9: '.pdv-s [data-a=transferir]' };
+document.addEventListener('keydown', (e) => { if (!S.token || rota().v !== 'pedido' || e.ctrlKey || e.altKey || e.metaKey) return; if (e.key === 'Escape' && $('#modal').classList.contains('on')) return fechar(); if ($('#modal').classList.contains('on')) return;
+  if (e.key === 'F4') { e.preventDefault(); const b = $('#busca'); if (b) { b.focus(); b.select(); } return; }
+  const el = ATALHOS[e.key] && $('.pdv ' + ATALHOS[e.key]); if (ATALHOS[e.key]) e.preventDefault(); if (el && !el.disabled) el.click(); });
 function boot() { render(); sync(); }

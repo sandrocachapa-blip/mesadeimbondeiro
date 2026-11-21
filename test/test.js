@@ -371,8 +371,10 @@ global.__t1 = (async () => {
   token = (await call('POST', 'login', { login: 'admin', password: 'segredo1' })).token;
   let st = await call('GET', 'state'); const L = st.local.id, muf = st.artigos.find((a) => a.nome === 'Mufete'), cafe = st.artigos.find((a) => a.nome === 'Café');
   const fs = require('fs');
-  for (const a of st.artigos) { assert.ok(a.imagem.startsWith('/img/'), a.nome + ' sem imagem'); assert.ok(fs.existsSync(__dirname + '/../public' + a.imagem), a.imagem); }
-  assert.equal(muf.imagem, '/img/mufete.png'); assert.equal(muf.favorito, false);
+  for (const a of st.artigos) { assert.ok(/^\/(img|foto)\//.test(a.imagem), a.nome + ' sem imagem'); assert.ok(fs.existsSync(__dirname + '/../public' + a.imagem), a.imagem); }
+  assert.equal(muf.imagem, '/foto/peixe-grelhado-com-banana-pao.jpg'); assert.equal(muf.favorito, false);
+  assert.equal(st.artigos.length, 73); assert.equal(st.artigos.filter((x) => x.imagem.startsWith('/foto/')).length, 42); assert.equal(st.artigos.find((x) => x.nome === 'Tiramisù').imagem, '/foto/tiramisu.jpg'); assert.equal(st.artigos.find((x) => x.nome === 'Mojito').imagem, '/img/mojito.png');
+  assert.equal((await call('GET', 'menu', null, { l: 'principal' })).capa, '/foto/esplanada.jpg');
   // artigo novo sem ilustração fica vazio (a app usa a genérica); favorito guarda-se
   const cfg = await call('GET', 'cfg'); const am = cfg.artigos.find((a) => a.id === muf.id);
   await call('POST', 'cfg', { entidade: 'artigos', linha: { ...am, favorito: true } });
@@ -387,7 +389,7 @@ global.__t1 = (async () => {
   assert.equal((await raw('POST', 'foto', { artigo_id: muf.id, dados: png })).status, 401);
   const menu = await call('GET', 'menu', null, { l: 'principal' }); assert.equal(menu.familias.flatMap((x) => x.artigos).find((a) => a.id === muf.id).imagem, f.imagem);
   token = tk; await call('POST', 'foto', { artigo_id: muf.id, remover: true });
-  st = await call('GET', 'state'); assert.equal(st.artigos.find((a) => a.id === muf.id).imagem, '/img/mufete.png'); assert.equal((await raw('GET', 'foto', null, { a: muf.id })).status, 404);
+  st = await call('GET', 'state'); assert.equal(st.artigos.find((a) => a.id === muf.id).imagem, '/foto/peixe-grelhado-com-banana-pao.jpg'); assert.equal((await raw('GET', 'foto', null, { a: muf.id })).status, 404);
   // taxa de serviço: só nas mesas, sobre o consumo, e pode ser dispensada
   const ped = async (id) => (await call('GET', 'state')).pedidos.find((p) => p.id === id);
   await call('POST', 'cfg', { entidade: 'empresa', linha: { ...st.empresa, taxa_servico: 10 } });
@@ -409,6 +411,7 @@ global.__t1 = (async () => {
   r = await ops({ tipo: 'entrega.estado', d: { pedido_id: 'e1', estado: 'caminho', estafeta: 'João' } }, { tipo: 'entrega.estado', d: { pedido_id: 'e1', estado: 'voou' } }); assert.deepEqual(r.map((x) => x.ok), [true, false]);
   p = await ped('e1'); assert.equal(p.entrega_estado, 'caminho'); assert.equal(p.estafeta, 'João');
   await ops({ tipo: 'pedido.enviar', d: { pedido_id: 'e1' } }); p = await ped('e1'); assert.equal(p.linhas.filter((l) => l.estado === 'enviado').length, 1);          // só o prato vai para a cozinha
+  r = await ops({ tipo: 'pedido.cliente', d: { pedido_id: 'm1', cliente_nome: 'Empresa X, Lda', cliente_nif: '5417000099' } }); assert.ok(r[0].ok); p = await ped('m1'); assert.equal(p.cliente_nome, 'Empresa X, Lda'); assert.equal(p.cliente_nif, '5417000099');
   // dados fictícios trazem bairros e entregas
   await call('POST', 'demo', { acao: 'carregar' }); st = await call('GET', 'state'); assert.ok(st.bairros.length >= 6); assert.equal(st.pedidos.filter((x) => x.id.startsWith('demo-en-')).length, 2);
   await call('POST', 'demo', { acao: 'apagar' }); st = await call('GET', 'state'); assert.equal(st.bairros.length, 1);

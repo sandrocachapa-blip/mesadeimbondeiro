@@ -318,7 +318,7 @@ ACOES.entNova = () => { const bs = S.st.bairros || [];
   form('Nova entrega ao domicílio', [{ k: 'cliente_nome', label: 'Nome do cliente', req: 1 }, { k: 'cliente_tel', label: 'Telefone', type: 'tel' }, { k: 'bairro', label: 'Bairro', type: 'select', value: bs[0] ? bs[0].nome : '', options: bs.map((b) => [b.nome, b.nome + ' · ' + kz(b.taxa)]).concat([['', 'Outro bairro (indicar a taxa em baixo)']]) }, { k: 'morada', label: 'Morada e referências' }, { k: 'taxa', label: 'Taxa de entrega (Kz) — vazio usa a do bairro', type: 'number' }], (v) => {
     const b = bs.find((x) => x.nome === v.bairro), id = uuid();
     if (!op('pedido.abrir', { id, local_id: S.local, tipo: 'entrega', cliente_nome: v.cliente_nome, cliente_tel: v.cliente_tel, bairro: v.bairro, morada: v.morada, taxa_entrega: v.taxa === '' ? (b ? b.taxa : 0) : v.taxa })) return false;
-    S.x.verConta = false; S.x.busca = ''; ir('pedido/' + id);
+    S.x.verConta = false; S.x.busca = ''; ir((rota().v === 'empregado' ? 'empregado/' : 'pedido/') + id);
   }, '<p class="mudo" style="margin-top:10px">A taxa de entrega e a embalagem entram sozinhas na conta. Os bairros e as taxas definem-se no separador «Bairros e taxas».</p>'); };
 ACOES.entSair = (el) => { const p = P(el.dataset.id); if (!p) return; form('Saiu para entrega — ' + p.cliente_nome, [{ k: 'estafeta', label: 'Estafeta', value: p.estafeta || ls.get('estafeta', '') }], (v) => { ls.set('estafeta', v.estafeta); op('entrega.estado', { pedido_id: p.id, estado: 'caminho', estafeta: v.estafeta }); render(); }); };
 ACOES.entEstado = (el) => { op('entrega.estado', { pedido_id: el.dataset.id, estado: el.dataset.e }); render(); };
