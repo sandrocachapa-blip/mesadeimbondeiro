@@ -504,3 +504,23 @@ body.modo-app.tema-luxo .tabs-m { background: rgba(11,10,8,.96); border-top: 1px
 .ul-v { padding: 12px; margin: 0; }
 .pf-admin { background: #4A1A0C !important; } .pf-gerente { background: #B03F1B !important; } .pf-chefe { background: #8E55B5 !important; } .pf-caixa { background: #1C97A8 !important; } .pf-empregado { background: #2F74C0 !important; } .pf-cozinha { background: #2A9A52 !important; } .pf-bar { background: #C98500 !important; }
 .tema-luxo .ul-l { background: #14120E; border-color: #8C7335; } .tema-luxo .ul-u { color: #EFE6D2; } .tema-luxo .ul-u:hover { background: #1F1B14; } .tema-luxo .ul-u small, .tema-luxo .ul-b { color: #A99C82; }
+
+/* ---------- v17: simulador de smartphone e tablet ---------- */
+.sim-bt { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--linha); background: #fff; color: var(--castanho); border-radius: 99px; padding: 6px 12px 6px 10px; font: 600 13px var(--texto); white-space: nowrap; }
+.sim-bt svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sim-bt:hover { border-color: var(--terra); color: var(--terra); }
+@media (max-width: 980px) { .sim-bt { display: none; } }
+#sim { position: fixed; inset: 0; z-index: 80; background: radial-gradient(ellipse at 50% 30%, #3A1A0E 0%, #140805 75%); display: flex; flex-direction: column; }
+.sim-b { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: #F6EAD6; border-bottom: 1px solid rgba(246,234,214,.14); flex-wrap: wrap; }
+.sim-b > b { font: 600 18px var(--titulo); margin-right: 6px; }
+.sim-b .seg { background: rgba(255,255,255,.1); box-shadow: none; } .sim-b .seg button { color: #E8D6BA; display: inline-flex; flex-direction: column; align-items: center; line-height: 1.15; padding: 6px 14px; } .sim-b .seg button small { font-weight: 500; font-size: 10.5px; opacity: .7; } .sim-b .seg button.on { background: #F6EAD6; color: #3A1A0E; }
+.sim-n { font-size: 12.5px; opacity: .7; } .sim-b .btn { background: rgba(255,255,255,.08); border-color: rgba(246,234,214,.25); color: #F6EAD6; box-shadow: none; } .sim-b .btn.p { background: var(--terra); border-color: var(--terra); color: #fff; }
+.sim-z { flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+.sim-d { width: calc(var(--w) + 36px); height: calc(var(--h) + 36px); padding: 18px; border-radius: 54px; background: linear-gradient(145deg, #2B2B2E, #0E0E10); box-shadow: 0 0 0 2px #3C3C40, 0 40px 80px -20px rgba(0,0,0,.8), inset 0 0 0 1px rgba(255,255,255,.06); transform-origin: center center; position: relative; flex: none; }
+.sim-d.tab, .sim-d.tabh { border-radius: 38px; }
+.sim-d.tel::before { content: ''; position: absolute; top: 28px; left: 50%; width: 112px; height: 30px; margin-left: -56px; border-radius: 20px; background: #0A0A0B; z-index: 2; pointer-events: none; }
+.sim-e { width: var(--w); height: var(--h); border-radius: 38px; overflow: hidden; background: #FAF3E8; } .sim-d.tab .sim-e, .sim-d.tabh .sim-e { border-radius: 22px; }
+.sim-e iframe { width: 100%; height: 100%; border: 0; display: block; }
+body.sim-on { overflow: hidden; }
+.tema-luxo .sim-bt { background: transparent; border-color: #8C7335; color: #E7D3A1; }
+.sim-d.tel { width: calc(var(--w) + 28px); height: calc(var(--h) + 76px); padding: 46px 14px 30px; } .sim-d.tel::before { top: 13px; height: 22px; width: 96px; margin-left: -48px; } .sim-d.tel::after { content: ''; position: absolute; bottom: 11px; left: 50%; width: 120px; height: 5px; margin-left: -60px; border-radius: 3px; background: #4A4A4F; }

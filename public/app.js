@@ -4,7 +4,9 @@ const $ = (s, el) => (el || document).querySelector(s);
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const kz = (n) => new Intl.NumberFormat('pt-PT', { maximumFractionDigits: 0 }).format(Math.round(n || 0)).replace(/\s/g, ' ') + ' Kz';
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2));
-const ls = { get: (k, d) => { try { const v = localStorage.getItem('mdi.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem('mdi.' + k, JSON.stringify(v)); } catch (e) {} }, del: (k) => { try { localStorage.removeItem('mdi.' + k); } catch (e) {} } };
+// No simulador de telemóvel/tablet a app corre com sessão própria (outro utilizador, sem mexer na sessão principal)
+const SIM = new URLSearchParams(location.search).has('sim'), LSP = SIM ? 'mdi.sim.' : 'mdi.';
+const ls = { get: (k, d) => { try { const v = localStorage.getItem(LSP + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(LSP + k, JSON.stringify(v)); } catch (e) {} }, del: (k) => { try { localStorage.removeItem(LSP + k); } catch (e) {} } };
 const hora = (t) => new Date(t).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
 const dataHora = (t) => new Date(t).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const mins = (t) => Math.max(0, Math.round((Date.now() - new Date(t).getTime()) / 60000));
@@ -185,7 +187,7 @@ function render() {
     <nav>${gs.map((g, k) => { const tem = g.i.some((m) => m[0] === on), ab = (S.x.grpAb || {})[k] != null ? S.x.grpAb[k] : (tem || gs.length === 1);
       return `<div class="grp ${ab ? 'ab' : ''} ${tem ? 'act' : ''}"><button class="gh" data-a="grp" data-g="${k}" data-ab="${ab ? 1 : 0}"><span>${g.g}</span><i>▾</i></button><div class="sub">${g.i.map((m) => `<a href="#${m[0]}" class="${m[0] === on ? 'on' : ''}">${m[1]}</a>`).join('')}</div></div>`; }).join('')}</nav></aside>
     <div class="vela" data-a="ham"></div>
-    <div class="corpo"><header class="topo"><button class="ham" data-a="ham" aria-label="Menu">☰</button><b class="tit">${esc((todos.find((m) => m[0] === on) || ['', ''])[1])}</b><span class="esp"></span><span id="estado" class="pill"></span><button class="eu" data-a="eu">${esc(S.user.nome.split(' ')[0])} ▾</button></header><main>${corpo}</main></div>
+    <div class="corpo"><header class="topo"><button class="ham" data-a="ham" aria-label="Menu">☰</button><b class="tit">${esc((todos.find((m) => m[0] === on) || ['', ''])[1])}</b><span class="esp"></span>${!SIM && (pode('cfg') || pode('admin')) ? '<button class="sim-bt" data-a="simMenu" title="Ver a app como num smartphone ou tablet"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="12" height="16" rx="2"/><rect x="15.5" y="8" width="6" height="12" rx="1.5"/><path d="M8 17h2"/></svg><span>Simular telemóvel e tablet</span></button>' : ''}<span id="estado" class="pill"></span><button class="eu" data-a="eu">${esc(S.user.nome.split(' ')[0])} ▾</button></header><main>${corpo}</main></div>
     ${pode('pedir') && r.v !== 'pedido' && !empPed ? `<nav class="tabs-m">${[['empregado', 'Pedir'], ['servir', 'Prontos'], ['entregas', 'Entregas']].map((t) => `<a href="#${t[0]}" class="${on === t[0] ? 'on' : ''}">${TABI[t[0]]}<span>${t[1]}</span>${t[0] === 'servir' && prontosIds().length ? `<i>${prontosIds().length}</i>` : ''}</a>`).join('')}<button data-a="ham">${TABI.mais}<span>Mais</span></button></nav>` : ''}`;
   document.body.classList.toggle('com-tabs', pode('pedir') && r.v !== 'pedido' && !empPed); document.body.classList.toggle('emp-ped', empPed);
   if (sc) $('.lado nav').scrollTop = sc;
@@ -673,6 +675,7 @@ document.addEventListener('submit', async (e) => {
   try {
     const r = await api('login', { method: 'POST', body: { login: e.target.login.value, password: e.target.password.value } });
     S.token = r.token; S.user = r.user; ls.set('token', r.token); ls.set('user', r.user); ls.set('ultUser', r.user.login);
+    if (r.user.perfil === 'empregado' && !/^#empregado/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search + '#empregado');
     if (S.st && r.user.local_id && S.local !== r.user.local_id) { S.st = null; S.local = r.user.local_id; }
     render(); sync();
   } catch (er) { toast(er.message, 'erro'); }
@@ -699,7 +702,7 @@ setInterval(() => { if (S.token && S.st && ['cozinha', 'bar', 'mesas'].includes(
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
 Object.assign(VIEWS, { mesas: vMesas, pedido: vPedido, cozinha: () => vKds('cozinha'), bar: () => vKds('bar'), caixa: vCaixa, facturacao: vFact, relatorios: vRel, menu: vMenu, config: vCfg, servir: vServir, empregado: vEmp });
 const ATALHOS = { F2: '[data-a=nova][data-t=balcao]', F3: '[data-a=obsUlt]', F5: '.pdv-f [data-a=enviar]', F6: '[data-a=receber]', F7: '.pdv-q [data-a=desconto]', F8: '.pdv-q [data-a=consulta]', F9: '.pdv-s [data-a=transferir]' };
-document.addEventListener('keydown', (e) => { if (!S.token || rota().v !== 'pedido' || e.ctrlKey || e.altKey || e.metaKey) return; if (e.key === 'Escape' && $('#modal').classList.contains('on')) return fechar(); if ($('#modal').classList.contains('on')) return;
+document.addEventListener('keydown', (e) => { if (document.body.classList.contains('sim-on') || !S.token || rota().v !== 'pedido' || e.ctrlKey || e.altKey || e.metaKey) return; if (e.key === 'Escape' && $('#modal').classList.contains('on')) return fechar(); if ($('#modal').classList.contains('on')) return;
   if (e.key === 'F4') { e.preventDefault(); const b = $('#busca'); if (b) { b.focus(); b.select(); } return; }
   const el = ATALHOS[e.key] && $('.pdv ' + ATALHOS[e.key]); if (ATALHOS[e.key]) e.preventDefault(); if (el && !el.disabled) el.click(); });
 function boot() { render(); sync(); }
@@ -707,3 +710,27 @@ function boot() { render(); sync(); }
 document.addEventListener('focusin', (e) => { if (e.target.id === 'loginU' && (ls.get('ulista', null) || { lista: true }).lista) ACOES.abrirUsers(); });
 document.addEventListener('click', (e) => { const l = $('#uLista'); if (l && l.classList.contains('on') && !e.target.closest('.ul')) l.classList.remove('on'); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const l = $('#uLista'); if (l) l.classList.remove('on'); } });
+
+/* ---------- Simulador de smartphone e tablet (só no computador) ---------- */
+const DISP = { tel: { n: 'Smartphone', w: 390, h: 844 }, tab: { n: 'Tablet', w: 820, h: 1180 }, tabh: { n: 'Tablet deitado', w: 1180, h: 820 } };
+function simAbrir(tipo) {
+  tipo = DISP[tipo] ? tipo : ls.get('simTipo', 'tel'); ls.set('simTipo', tipo);
+  let o = $('#sim'); const d = DISP[tipo];
+  if (!o) { o = document.createElement('div'); o.id = 'sim'; document.body.appendChild(o); }
+  const hash = location.hash && !/^#(admin|config|artigos|grupo|dgestao|dstock|dpessoas)/.test(location.hash) ? location.hash : '';
+  o.innerHTML = `<div class="sim-b"><b>Simulador</b><div class="seg">${Object.entries(DISP).map(([k, v]) => `<button class="${k === tipo ? 'on' : ''}" data-a="simTipo" data-id="${k}">${v.n}<small>${v.w}×${v.h}</small></button>`).join('')}</div>
+    <span class="esp"></span><span class="sim-n">Sessão separada: entre com outro utilizador sem sair desta.</span><button class="btn s" data-a="simSair" title="Sair do utilizador do simulador e voltar ao ecrã de entrada">Trocar utilizador</button><button class="btn s" data-a="simJanela">Abrir em janela</button><button class="btn s p" data-a="simFechar">Fechar ✕</button></div>
+    <div class="sim-z"><div class="sim-d ${tipo}" style="--w:${d.w}px;--h:${d.h}px"><div class="sim-e"><iframe id="simF" src="/?sim=1${hash}" title="Simulador ${d.n}"></iframe></div></div></div>`;
+  document.body.classList.add('sim-on'); simEscala();
+}
+function simEscala() { const z = $('#sim .sim-z'), dv = $('#sim .sim-d'); if (!z || !dv) return; const fw = dv.offsetWidth, fh = dv.offsetHeight, k = Math.min(1, (z.clientWidth - 24) / fw, (z.clientHeight - 24) / fh); dv.style.transform = `scale(${k})`; dv.style.margin = `${(fh * k - fh) / 2}px ${(fw * k - fw) / 2}px`; }
+window.addEventListener('resize', simEscala);
+Object.assign(ACOES, {
+  simMenu: () => simAbrir(),
+  simTipo: (el) => { const f = $('#simF'), cur = f && f.contentWindow ? f.contentWindow.location.hash : ''; simAbrir(el.dataset.id); if (cur) { const nf = $('#simF'); nf.src = '/?sim=1' + cur; } },
+  simFechar: () => { const o = $('#sim'); if (o) o.remove(); document.body.classList.remove('sim-on'); },
+  simSair: () => { try { Object.keys(localStorage).filter((k) => k.startsWith('mdi.sim.') && !/ulista|tema|simTipo/.test(k)).forEach((k) => localStorage.removeItem(k)); } catch (e) {} const f = $('#simF'); if (f) f.src = '/?sim=1'; },
+  simJanela: () => { const d = DISP[ls.get('simTipo', 'tel')], f = $('#simF'); const u = '/?sim=1' + (f && f.contentWindow ? f.contentWindow.location.hash : ''); window.open(u, 'mdiSim', `width=${d.w},height=${d.h},resizable=yes`); ACOES.simFechar(); },
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('sim-on')) ACOES.simFechar(); });
+if (SIM) document.documentElement.classList.add('em-sim');
