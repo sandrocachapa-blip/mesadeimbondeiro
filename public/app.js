@@ -12,8 +12,8 @@ const hojeLuanda = () => new Date(Date.now() + 3600e3).toISOString().slice(0, 10
 
 const MEIOS = [['numerario', 'Numerário'], ['tpa', 'TPA Multicaixa'], ['express', 'Multicaixa Express'], ['transferencia', 'Transferência']];
 const meioNome = (m) => (MEIOS.find((x) => x[0] === m) || [m, m])[1];
-const PERFIS = { admin: 'Administração', gerente: 'Gerente', caixa: 'Caixa', empregado: 'Empregado de mesa', cozinha: 'Cozinha', bar: 'Bar' };
-const PODE = { cfg: ['admin', 'gerente'], admin: ['admin'], pedir: ['admin', 'gerente', 'caixa', 'empregado'], pagar: ['admin', 'gerente', 'caixa'], aprovar: ['admin', 'gerente'] };
+const PERFIS = { admin: 'Administração', gerente: 'Gerente', chefe: 'Chefe de sala', caixa: 'Caixa', empregado: 'Empregado de mesa', cozinha: 'Cozinha', bar: 'Bar' };
+const PODE = { cfg: ['admin', 'gerente'], admin: ['admin'], pedir: ['admin', 'gerente', 'chefe', 'caixa', 'empregado'], pagar: ['admin', 'gerente', 'chefe', 'caixa'], aprovar: ['admin', 'gerente'], sala: ['admin', 'gerente', 'chefe'] };
 const ESTADOS = { novo: 'por enviar', enviado: 'enviado', preparar: 'a preparar', pronto: 'pronto', entregue: 'entregue', anulado: 'anulado' };
 
 const S = { token: ls.get('token', ''), user: ls.get('user', null), local: ls.get('local', ''), st: ls.get('state', null), queue: ls.get('queue', []), online: navigator.onLine, fam: '', x: {} };
@@ -170,9 +170,11 @@ function render() {
   const app = $('#app');
   document.body.classList.toggle('tema-luxo', !!(S.st && S.st.empresa && S.st.empresa.tema === 'luxo') || (!S.st && ls.get('tema', '') === 'luxo'));
   if (S.st && S.st.empresa) ls.set('tema', S.st.empresa.tema || 'classico');
-  if (!S.token || !S.user) return (app.innerHTML = vLogin());
+  if (!S.token || !S.user) { document.body.classList.remove('modo-app', 'emp-ped', 'com-tabs'); return (app.innerHTML = vLogin()); }
   if (!S.st) { app.innerHTML = '<div class="login"><div class="cx"><img src="/logo.png" alt=""><p>A carregar…</p><p class="mudo">Na primeira utilização é precisa ligação à internet.</p></div></div>'; return; }
   const gs = menus(), todos = gs.flatMap((g) => g.i), r = rota();
+  const modoApp = S.user.perfil === 'empregado'; document.body.classList.toggle('modo-app', modoApp);
+  if (modoApp && r.v === 'pedido' && r.id) { location.replace('#empregado/' + r.id); return; }
   if (!todos.some((m) => m[0] === r.v) && r.v !== 'pedido') { location.hash = todos[0][0]; return; }
   const on = r.v === 'pedido' ? 'mesas' : r.v, empPed = r.v === 'empregado' && !!(r.id && P(r.id));
   let corpo = '';
@@ -239,12 +241,12 @@ function vMesas() {
   const soltas = st.pedidos.filter((p) => !p.mesa_id), ocup = st.pedidos.filter((p) => p.mesa_id).length;
   return `<div class="cab"><h1>${esc(st.local.nome)}</h1><span class="mudo">${ocup} de ${vis.length} mesas ocupadas</span><span class="esp"></span>
     <div class="seg"><button class="${modo === 'planta' ? 'on' : ''}" data-a="modoMesas" data-m="planta">Planta 3D</button><button class="${modo === 'lista' ? 'on' : ''}" data-a="modoMesas" data-m="lista">Lista</button></div>
-    ${modo === 'planta' && pode('cfg') ? (ed ? '' : '<button class="btn p" data-a="editarPlanta">Mover e juntar mesas</button>') : ''}
+    ${modo === 'planta' && pode('cfg') ? (ed ? '' : '<button class="btn p" data-a="editarPlanta">Editar mesas</button>') : ''}
     <button class="btn" data-a="reservar">Reservar mesa</button><button class="btn" data-a="nova" data-t="balcao">Conta de balcão</button><button class="btn" data-a="nova" data-t="takeaway">Take-away</button></div>
     ${(st.reservas || []).some((r) => r.estado === 'pendente') ? `<div class="aviso">Há ${st.reservas.filter((r) => r.estado === 'pendente').length} pedido(s) de reserva para hoje por confirmar. <a href="#reservas">Ver reservas</a></div>` : ''}
     ${!st.turno && pode('pagar') ? '<div class="aviso">A caixa está fechada. Pode registar pedidos, mas para receber pagamentos abra a caixa no menu <a href="#caixa">Caixa</a>.</div>' : ''}
-    ${ed ? `<div class="aviso ferr"><div><b>Mover:</b> arraste cada mesa para o sítio. <b>Juntar:</b> toque nas mesas a juntar (a primeira fica com o número activo) e escolha «Juntar». As outras deixam de aparecer e a conta passa a ser uma só.</div>
-      <div class="fila" style="margin-top:10px"><button class="btn p" data-a="juntarMesas" ${nSel >= 2 ? '' : 'disabled'}>Juntar${nSel >= 2 ? ' ' + nSel + ' mesas' : ''}</button><button class="btn" data-a="separarMesas" ${nSel ? '' : 'disabled'}>Separar</button><button class="btn" data-a="novaMesa">Adicionar mesa</button><button class="btn" data-a="formaMesas" ${nSel ? '' : 'disabled'}>Mudar forma</button><span class="esp"></span><button class="btn p" data-a="guardarPlanta">Guardar posições</button><button class="btn" data-a="editarPlanta">Fechar</button></div></div>` : ''}
+    ${ed ? `<div class="aviso ferr"><div><b>Mover:</b> arraste cada mesa para o sítio. <b>Alterar ou apagar:</b> toque na mesa e escolha «Alterar mesa» ou «Apagar». <b>Juntar:</b> toque nas mesas a juntar (a primeira fica com o número activo) e escolha «Juntar». As outras deixam de aparecer e a conta passa a ser uma só.</div>
+      <div class="fila" style="margin-top:10px"><button class="btn p" data-a="juntarMesas" ${nSel >= 2 ? '' : 'disabled'}>Juntar${nSel >= 2 ? ' ' + nSel + ' mesas' : ''}</button><button class="btn" data-a="separarMesas" ${nSel ? '' : 'disabled'}>Separar</button><button class="btn" data-a="novaMesa">Adicionar mesa</button><button class="btn" data-a="alterarMesa" ${nSel === 1 ? '' : 'disabled'}>Alterar mesa</button><button class="btn" data-a="formaMesas" ${nSel ? '' : 'disabled'}>Mudar forma</button><button class="btn perigo" data-a="apagarMesas" ${nSel ? '' : 'disabled'}>Apagar${nSel > 1 ? ' ' + nSel + ' mesas' : ''}</button><span class="esp"></span><button class="btn p" data-a="guardarPlanta">Guardar posições</button><button class="btn" data-a="editarPlanta">Fechar</button></div></div>` : ''}
     ${soltas.length ? `<h3 class="zona">Balcão, take-away e entregas</h3><div class="grelha">${soltas.map((p) => `<button class="mesa oc ${corMesa(p).cls}" data-a="abrir" data-id="${p.id}"><b>${esc(p.mesa_nome)}</b><span class="mudo">${esc(p.aberto_por_nome)} · ${hora(p.aberto_em)}</span>${esperaTxt(corMesa(p))}<span class="tot">${kz(p.total)}</span></button>`).join('')}</div>` : ''}
     <div class="legenda"><span><i class="l0"></i>Livre</span><span><i class="l4"></i>Reservada hoje</span><span><i class="l1"></i>Ocupada, pedido em dia</span><span><i class="l2"></i>À espera há 10 min ou mais</span><span><i class="l3"></i>À espera há 30 min ou mais</span><span class="mudo">A espera pára quando a cozinha ou o bar dão o pedido como pronto.</span></div>
     ${modo === 'planta' ? `<div class="chips" style="margin-top:12px">${zonas.map((z) => `<button class="chip ${z === S.x.zona ? 'on' : ''}" data-a="zona" data-id="${esc(z)}">${esc(z)}</button>`).join('')}</div>
@@ -266,13 +268,13 @@ function linhasHtml(p) {
       ${l.estado === 'novo' ? `<div class="qt"><button data-a="menos" data-id="${l.id}">−</button><b>${l.qtd}</b><button data-a="mais" data-id="${l.id}">+</button></div>` : `<b class="qx">${l.qtd} ×</b>`}
       <div class="n">${esc(l.nome)}<small><span class="est ${l.estado}">${ESTADOS[l.estado]}</span>${l.criado_por_nome === 'Cliente (QR)' && l.estado === 'novo' ? ' pedido pelo cliente' : ''}</small>${l.notas ? `<span class="obs-t">Obs.: ${esc(l.notas)}</span>` : ''}${l.estado === 'novo' ? `<button class="obs-b" data-a="nota" data-id="${l.id}">${l.notas ? 'Alterar obs.' : '+ Observação'}</button>` : ''}</div>
       <span class="v">${kz(l.preco * l.qtd)}</span>
-      ${l.estado === 'novo' ? `<button class="tira" data-a="tirar" data-id="${l.id}" title="Tirar da conta">−</button>` : (l.estado !== 'anulado' && pode('aprovar') ? `<button class="tira" data-a="anularL" data-id="${l.id}" title="Anular linha">×</button>` : '<span class="tira0"></span>')}
+      ${l.estado === 'novo' ? `<button class="tira" data-a="tirar" data-id="${l.id}" title="Tirar da conta">−</button>` : (l.estado !== 'anulado' && pode('sala') ? `<button class="tira" data-a="anularL" data-id="${l.id}" title="Anular linha">×</button>` : '<span class="tira0"></span>')}
     </div>`).join('') : '<p class="mudo vazio">Toque nos artigos para os juntar à conta.</p>';
 }
 function totaisHtml(p) {
   const base = p.linhas.filter((l) => !AUTO.includes(l.seccao) && l.estado !== 'anulado').reduce((s, l) => s + l.preco * l.qtd, 0), autos = p.linhas.filter((l) => AUTO.includes(l.seccao) && l.estado !== 'anulado'), pg = pago(p);
   return `<div class="tot-l"><span>Subtotal</span><span>${kz(base)}</span></div>
-    ${autos.map((l) => `<div class="tot-l"><span>${esc(l.nome)}${l.qtd > 1 ? ' × ' + l.qtd : ''}${pode('aprovar') ? ` <button class="xz" data-a="anularL" data-id="${l.id}" title="Dispensar esta taxa">×</button>` : ''}</span><span>${kz(l.preco * l.qtd)}</span></div>`).join('')}
+    ${autos.map((l) => `<div class="tot-l"><span>${esc(l.nome)}${l.qtd > 1 ? ' × ' + l.qtd : ''}${pode('sala') ? ` <button class="xz" data-a="anularL" data-id="${l.id}" title="Dispensar esta taxa">×</button>` : ''}</span><span>${kz(l.preco * l.qtd)}</span></div>`).join('')}
     ${p.desconto ? `<div class="tot-l"><span>Desconto</span><span>− ${kz(p.desconto)}</span></div>` : ''}
     <div class="tot-l g"><span>Total</span><span>${kz(p.total)}</span></div>
     ${pg ? `<div class="tot-l"><span>Recebido</span><span>${kz(pg)}</span></div><div class="tot-l"><b>Em falta</b><b>${kz(Math.max(0, p.total - pg))}</b></div>` : ''}`;
@@ -291,14 +293,14 @@ function vPedido(id) {
     <div class="arts" id="arts">${artsHtml(p)}</div>
   </div>
   <div class="conta pdv-d">
-    <header class="pdv-h">${ICO.mesa}<b>${esc(p.mesa_nome)}</b><span>${hora(p.aberto_em)}</span><span class="esp"></span>${pode('aprovar') ? `<button class="pdv-x" data-a="anularP" data-id="${p.id}">Anular conta</button>` : ''}</header>
+    <header class="pdv-h">${ICO.mesa}<b>${esc(p.mesa_nome)}</b><span>${hora(p.aberto_em)}</span><span class="esp"></span>${pode('sala') ? `<button class="pdv-x" data-a="anularP" data-id="${p.id}">Anular conta</button>` : ''}</header>
     <div class="pdv-s"><button data-a="cliente" data-id="${p.id}">${ICO.user}<span>${p.cliente_nome ? esc(p.cliente_nome) + (p.cliente_nif ? ' · NIF ' + esc(p.cliente_nif) : '') : 'Cliente'}</span></button><div>${ICO.user}<span>${esc(p.aberto_por_nome)}</span></div></div>
     ${p.tipo === 'entrega' ? `<div class="pdv-ent"><b>Entrega</b> · ${esc([p.bairro, p.morada].filter(Boolean).join(' · ')) || 'sem morada'}${p.cliente_tel ? ' · <a href="tel:' + esc(p.cliente_tel) + '">' + esc(p.cliente_tel) + '</a>' : ''}${p.estafeta ? ' · estafeta: ' + esc(p.estafeta) : ''} · <a href="#entregas">quadro de entregas</a></div>` : ''}
     <div class="pdv-s"><button class="az" data-a="transferir" data-id="${p.id}">${ICO.troca}<span>Mudar de mesa</span>${tecla('F9')}</button><button class="vd" data-a="nova" data-t="balcao">${ICO.mais}<span>Conta de balcão</span>${tecla('F2')}</button></div>
     <div class="pdv-l">${linhasHtml(p)}</div>
     <div class="pdv-t">${totaisHtml(p)}</div>
     <div class="pdv-q">
-      <button class="q1" data-a="desconto" data-id="${p.id}" ${pode('aprovar') ? '' : 'disabled'}>${ICO.desconto}<span>Desconto</span>${tecla('F7')}</button>
+      <button class="q1" data-a="desconto" data-id="${p.id}" ${pode('sala') ? '' : 'disabled'}>${ICO.desconto}<span>Desconto</span>${tecla('F7')}</button>
       <button class="q2" data-a="obsUlt" data-id="${p.id}">${ICO.obs}<span>Observação</span>${tecla('F3')}</button>
       <button class="q3" data-a="consulta" data-id="${p.id}">${ICO.imp}<span>Imprimir</span>${tecla('F8')}</button>
       <button class="q4" data-a="${p.tipo === 'entrega' ? 'irEntregas' : 'entNova'}">${ICO.moto}<span>Entrega</span></button>
@@ -502,7 +504,7 @@ function vCfg() {
   if (tab === 'familias') corpo = T(['Família', 'Carta', 'Preparada em', 'Ordem', 'Activa'], d.familias.map((f) => [f.id, esc(f.nome), f.carta === 'vinhos' ? 'Vinhos e bebidas alcoólicas' : 'Menu', f.seccao === 'bar' ? 'Bar' : 'Cozinha', f.ordem, sn(f.activo)]));
   if (tab === 'mesas') corpo = T(['Mesa', 'Zona', 'Local', 'Lugares', 'Activa'], d.mesas.map((m) => [m.id, esc(m.nome), esc(m.zona), esc(loc(m.local_id)), m.lugares, sn(m.activo)]));
   if (tab === 'locais') corpo = T(['Local', 'Tipo', 'Morada', 'Endereço do menu', 'Activo'], d.locais.map((l) => [l.id, esc(l.nome), esc(l.tipo), esc(l.morada), '/menu?l=' + esc(l.slug), sn(l.activo)]));
-  if (tab === 'utilizadores') corpo = T(['Nome', 'Utilizador', 'Perfil', 'Local', 'Activo'], d.utilizadores.map((u) => [u.id, esc(u.nome), esc(u.login), PERFIS[u.perfil] || u.perfil, esc(loc(u.local_id)), sn(u.activo)]));
+  if (tab === 'utilizadores') corpo = (d.utilizadores.some((u) => u.id.startsWith('demo-u-') && u.activo) ? '<div class="aviso">Há utilizadores de teste com a palavra-passe <b>123</b>. Antes de usar a app com clientes, mude-lhes a palavra-passe ou desactive-os (saem também ao apagar os dados fictícios).</div>' : '') + T(['Nome', 'Utilizador', 'Perfil', 'Local', 'Activo'], d.utilizadores.map((u) => [u.id, esc(u.nome) + (u.id.startsWith('demo-u-') ? ' <span class="est pendente">teste</span>' : ''), esc(u.login), PERFIS[u.perfil] || u.perfil, esc(loc(u.local_id)), sn(u.activo)]));
   if (tab === 'empresa') { const e = d.empresa; corpo = `<table><tr><td>Nome</td><td>${esc(e.nome)}</td></tr><tr><td>NIF</td><td>${esc(e.nif) || '—'}</td></tr><tr><td>Regime de IVA</td><td>${esc(e.regime_iva)}</td></tr><tr><td>Taxa de IVA incluída nos preços</td><td>${e.taxa_iva}%</td></tr><tr><td>Software de facturação certificado</td><td>${esc(e.factura_software) || 'por definir'}</td></tr><tr><td>Embalagem de take-away</td><td>${e.emb_preco > 0 ? kz(e.emb_preco) + (e.emb_modo === 'pedido' ? ' por pedido' : ' por prato') : 'não é cobrada'}</td></tr><tr><td>Taxa de serviço nas mesas</td><td>${e.taxa_servico > 0 ? e.taxa_servico + '% sobre o consumo' : 'não é cobrada'}</td></tr><tr><td>Aspecto</td><td>${e.tema === 'luxo' ? 'Luxo — preto e dourado' : 'Clássico — terracota e creme'}</td></tr></table>
     <div class="aviso" style="margin:16px 0 0"><b>Dados fictícios de demonstração.</b> Preenchem todos os menus com vendas, stock, compras, equipa, salários, finanças, reservas e um segundo local de exemplo. Podem ser apagados de uma vez, sem tocar nos dados reais.<div class="fila" style="margin-top:10px"><button class="btn" data-a="demo" data-ac="carregar">Carregar dados fictícios</button><button class="btn perigo" data-a="demo" data-ac="apagar">Apagar dados fictícios</button></div></div>`; }
   return `<div class="cab"><h1>Configuração</h1><span class="esp"></span><button class="btn p" data-a="cfgEdit" data-id="">${tab === 'empresa' ? 'Editar dados da empresa' : 'Novo registo'}</button></div>
@@ -528,7 +530,7 @@ function cfgForm(id, tabF, pre) {
       if (fl) await api('foto', { method: 'POST', body: { artigo_id: res.id, dados: await reduzFoto(fl) } });
       else if ($('#fotoR') && $('#fotoR').checked) await api('foto', { method: 'POST', body: { artigo_id: res.id, remover: true } }); }
     toast('Guardado'); delete S.x.cfg; sync(); render();
-  }, tab === 'artigos' ? `<label>Fotografia do prato ou da bebida (opcional)</label><div class="foto-f"><img src="${esc(r.imagem || '/img/_prato.png')}" alt=""><div><input type="file" id="fotoF" accept="image/*">${String(r.imagem || '').startsWith('/api/foto') ? '<label><input type="checkbox" id="fotoR" style="width:auto"> Remover a fotografia e voltar à ilustração</label>' : ''}<small class="mudo">Sem fotografia, é usada a ilustração da casa. A fotografia é reduzida antes de ser enviada.</small></div></div>` : '');
+  }, tab === 'artigos' ? `<label>Fotografia do prato ou da bebida (opcional)</label><div class="foto-f"><img src="${esc(r.imagem || '/img/_prato.png')}" alt=""><div><input type="file" id="fotoF" accept="image/*">${String(r.imagem || '').startsWith('/api/foto') ? '<label><input type="checkbox" id="fotoR" style="width:auto"> Remover a fotografia e voltar à ilustração</label>' : ''}<small class="mudo">Sem fotografia, é usada a ilustração da casa. A fotografia é reduzida antes de ser enviada.</small></div></div>` : tab === 'mesas' && r.id ? `<div style="margin-top:14px"><button type="button" class="btn perigo" data-a="apagarMesaCfg" data-id="${r.id}">Apagar esta mesa</button></div>` : '');
 }
 
 /* ---------- Acções ---------- */
@@ -576,6 +578,14 @@ const ACOES = {
   verConta: () => { S.x.verConta = !S.x.verConta; render(); window.scrollTo(0, 0); },
   modoMesas: (el) => { S.x.modoMesas = el.dataset.m; S.x.editar = false; render(); },
   zona: (el) => { S.x.zona = el.dataset.id; render(); },
+  alterarMesa: () => { const m = S.st.mesas.find((x) => x.id === (S.x.sel || [])[0]); if (!m) return toast('Toque na mesa que quer alterar', 'erro');
+    const ps = posMesa(m, mesasVis().filter((x) => x.zona === m.zona).indexOf(m));
+    form('Alterar ' + m.nome, [{ k: 'nome', label: 'Nome ou número', value: m.nome, req: 1 }, { k: 'lugares', label: 'Lugares', type: 'number', value: m.lugares }, { k: 'zona', label: 'Zona (escreva um nome novo para criar outra zona)', value: m.zona, req: 1 }, { k: 'forma', label: 'Forma', type: 'select', value: ps.forma || 'quadrada', options: [['quadrada', 'Quadrada'], ['redonda', 'Redonda'], ['rect', 'Rectangular']] }],
+      async (v) => { await api('mesa-editar', { method: 'POST', body: { id: m.id, nome: v.nome, zona: v.zona, lugares: v.lugares, forma: v.forma } }); if (S.x.pos) delete S.x.pos[m.id]; S.x.zona = v.zona; S.x.sel = []; delete S.x.cfg; toast('Mesa alterada'); await sync(); render(); }); },
+  apagarMesas: () => { const ms = (S.x.sel || []).map((id) => S.st.mesas.find((x) => x.id === id)).filter(Boolean); if (!ms.length) return toast('Toque nas mesas que quer apagar', 'erro');
+    modal(`<h2>Apagar ${ms.length > 1 ? ms.length + ' mesas' : esc(ms[0].nome)}?</h2><p>${ms.length > 1 ? esc(ms.map((m) => m.nome).join(', ')) + '. ' : ''}A mesa sai da planta e deixa de aceitar contas e reservas. As vendas antigas ficam no histórico. Não dá para desfazer.</p><div class="fila" style="margin-top:16px"><span class="esp"></span><button class="btn" data-a="fechar">Cancelar</button><button class="btn perigo" data-a="apagarMesasSim">Apagar</button></div>`); },
+  apagarMesaCfg: (el) => { S.x.sel = [el.dataset.id]; ACOES.apagarMesas(); },
+  apagarMesasSim: async () => { try { const r = await api('mesas-apagar', { method: 'POST', body: { ids: S.x.sel || [] } }); fechar(); S.x.sel = []; delete S.x.cfg; toast(r.n + ' mesa(s) apagada(s)'); await sync(); render(); } catch (e) { fechar(); toast(e.message, 'erro'); } },
   editarPlanta: () => { S.x.editar = !S.x.editar; S.x.pos = {}; S.x.sel = []; S.x.modoMesas = 'planta'; render(); },
   guardarPlanta: async () => { const ms = mesasVis().map((m) => Object.assign({ id: m.id }, posMesa(m, mesasVis().filter((y) => y.zona === m.zona).indexOf(m))));
     try { await api('planta', { method: 'POST', body: { mesas: ms } }); ms.forEach((x) => { const m = S.st.mesas.find((y) => y.id === x.id); m.x = x.x; m.y = x.y; m.forma = x.forma; }); S.x.pos = {}; guardar(); toast('Posições guardadas'); render(); } catch (e) { toast(e.message, 'erro'); } },

@@ -425,6 +425,24 @@ global.__t1 = (async () => {
   token = ''; assert.equal((await raw('POST', 'cfg', { entidade: 'artigos', apagar: cafe.id })).status, 401); token = tk;
   // dados fictícios trazem bairros e entregas
   await call('POST', 'demo', { acao: 'carregar' }); st = await call('GET', 'state'); assert.ok(st.bairros.length >= 6); assert.equal(st.pedidos.filter((x) => x.id.startsWith('demo-en-')).length, 2);
+  // mesas: alterar e apagar (nunca com conta aberta)
+  st = await call('GET', 'state'); const mLiv = st.mesas.filter((m) => !st.pedidos.some((p) => p.mesa_id === m.id)), mOc = st.mesas.find((m) => st.pedidos.some((p) => p.mesa_id === m.id));
+  await call('POST', 'mesa-editar', { id: mOc.id, nome: 'Mesa VIP', zona: 'Varanda', lugares: 8, forma: 'redonda' });
+  st = await call('GET', 'state'); const mv = st.mesas.find((m) => m.id === mOc.id); assert.deepEqual([mv.nome, mv.zona, mv.lugares, mv.forma], ['Mesa VIP', 'Varanda', 8, 'redonda']); assert.equal(st.pedidos.find((p) => p.mesa_id === mOc.id).mesa_nome, 'Mesa VIP');
+  assert.equal((await raw('POST', 'mesa-editar', { id: mLiv[0].id, nome: 'Mesa VIP', zona: 'Sala', lugares: 2 })).status, 409);
+  assert.equal((await raw('POST', 'mesas-apagar', { ids: [mOc.id] })).status, 409);
+  const nM = st.mesas.length; assert.equal((await call('POST', 'mesas-apagar', { ids: [mLiv[0].id, mLiv[1].id] })).n, 2);
+  st = await call('GET', 'state'); assert.equal(st.mesas.length, nM - 2); assert.ok(!st.mesas.some((m) => m.id === mLiv[0].id));
+  // utilizadores de teste (palavra-passe 123) e perfil Chefe de sala
+  cg = await call('GET', 'cfg'); assert.deepEqual(cg.utilizadores.filter((x) => x.id.startsWith('demo-u-')).map((x) => x.login).sort(), ['bar', 'caixa', 'chefe', 'cozinha', 'empregado', 'empregado2', 'gerente']);
+  const entra = async (login) => { const r = await raw('POST', 'login', { login, password: '123' }); assert.equal(r.status, 200, login); return r.json; };
+  for (const [lg, pf] of [['gerente', 'gerente'], ['chefe', 'chefe'], ['caixa', 'caixa'], ['empregado', 'empregado'], ['empregado2', 'empregado'], ['cozinha', 'cozinha'], ['bar', 'bar']]) assert.equal((await entra(lg)).user.perfil, pf);
+  token = (await entra('chefe')).token;                                    // chefe de sala: pede, cobra, faz descontos e anula; não vê salários nem configuração
+  r = await ops({ tipo: 'pedido.abrir', d: { id: 'cs1', local_id: L, tipo: 'balcao' } }, { tipo: 'linha.add', d: { id: 'cs1a', pedido_id: 'cs1', artigo_id: muf.id, qtd: 1 } }, { tipo: 'pedido.desconto', d: { pedido_id: 'cs1', valor: 500 } }, { tipo: 'pedido.anular', d: { pedido_id: 'cs1', motivo: 'teste' } }); assert.ok(r.every((x) => x.ok), JSON.stringify(r));
+  assert.equal((await raw('GET', 'salarios', null, { mes: '2026-11' })).status, 403); assert.equal((await raw('GET', 'cfg')).status, 403);
+  token = (await entra('empregado')).token;                                // empregado: pede, mas não faz descontos
+  r = await ops({ tipo: 'pedido.abrir', d: { id: 'em1', local_id: L, tipo: 'balcao' } }, { tipo: 'pedido.desconto', d: { pedido_id: 'em1', valor: 100 } }); assert.deepEqual(r.map((x) => x.ok), [true, false]);
+  token = tk; await ops({ tipo: 'pedido.anular', d: { pedido_id: 'em1', motivo: 'teste' } });
   // dashboards dos menus de gestão
   const dg = await call('GET', 'dash', null, { t: 'gestao', local: L, dias: 30 }); assert.equal(dg.vendasDia.length, 30); assert.equal(dg.horas.length, 24); assert.ok(dg.k.vendas > 0 && dg.top.length > 0 && dg.familias.length > 0 && dg.meios.length > 0);
   assert.ok(Math.abs(dg.vendasDia.reduce((a, b) => a + b, 0) - dg.k.vendas) < 1); assert.ok(Math.abs(dg.horas.reduce((a, b) => a + b, 0) - dg.k.vendas) < 1); assert.ok(Math.abs(dg.meios.reduce((a, b) => a + b.v, 0) - dg.k.vendas) < dg.k.vendas * 0.05);
@@ -433,5 +451,6 @@ global.__t1 = (async () => {
   const dp = await call('GET', 'dash', null, { t: 'pessoas', local: L, dias: 30 }); assert.equal(dp.meses.length, 6); assert.ok(dp.nFun > 0 && dp.massa > 0 && dp.receitas[5] > 0 && dp.bancos.length > 0);
   assert.equal((await raw('GET', 'dash', null, { t: 'xpto', local: L })).status, 400);
   await call('POST', 'demo', { acao: 'apagar' }); st = await call('GET', 'state'); assert.equal(st.bairros.length, 1);
+  assert.equal((await call('GET', 'cfg')).utilizadores.filter((x) => x.id.startsWith('demo-u-')).length, 0); assert.equal((await raw('POST', 'login', { login: 'empregado', password: '123' })).status, 401);
   console.log('OK — imagens, fotografia, taxa de serviço e entregas');
 })().catch((e) => { console.error(e); process.exit(1); });

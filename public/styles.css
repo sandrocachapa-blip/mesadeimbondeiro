@@ -477,3 +477,17 @@ i.s1 { background: var(--s1); } i.s2 { background: var(--s2); } i.s3 { backgroun
 .dash .kpis { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); } .dash .kpi b { color: var(--castanho); text-shadow: none; } .dash .kpi b.neg { color: #C8221A; } body.tema-luxo .dash .kpi b.neg { color: #F0B4AC; }
 .g-cx td.dir, .g-cx th.dir { white-space: nowrap; }
 @media (max-width: 600px) { .dash .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dash .kpi b { font-size: 20px; } .g-f .esp { display: none; } }
+
+/* ---------- v15: perfil Empregado sempre com layout de telemóvel/tablet (em qualquer ecrã) ---------- */
+body.modo-app .lado { transform: translateX(-105%); transition: transform .22s ease; width: 290px; }
+body.modo-app.menu-on .lado { transform: none; }
+body.modo-app.menu-on .vela { display: block; position: fixed; inset: 0; background: rgba(44,14,5,.5); z-index: 25; }
+body.modo-app .corpo { margin-left: 0; } body.modo-app .ham { display: block; }
+body.modo-app main { max-width: 1100px; margin: 0 auto; padding-bottom: 96px; } body.modo-app.emp-ped main { max-width: none; padding-bottom: 0; }
+body.modo-app .tabs-m { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 14; background: rgba(250,243,232,.97); backdrop-filter: blur(8px); border-top: 1px solid var(--linha); padding: 6px max(6px, calc(50vw - 360px)) calc(6px + env(safe-area-inset-bottom)); }
+body.modo-app .tabs-m a, body.modo-app .tabs-m button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 58px; justify-content: center; background: none; border: 0; border-radius: 12px; color: var(--castanho-2); font: 600 12.5px var(--texto); text-decoration: none; position: relative; }
+body.modo-app .tabs-m svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+body.modo-app .tabs-m a.on { color: var(--terra); background: rgba(176,63,27,.09); }
+body.modo-app .tabs-m i { position: absolute; top: 4px; left: 54%; min-width: 20px; height: 20px; border-radius: 99px; background: #2A6B31; color: #fff; font: 700 12px/20px var(--texto); text-align: center; padding: 0 5px; }
+body.modo-app.kds-full .tabs-m { display: none; }
+body.modo-app.tema-luxo .tabs-m { background: rgba(11,10,8,.96); border-top: 1px solid #8C7335; } body.modo-app.tema-luxo .tabs-m a, body.modo-app.tema-luxo .tabs-m button { color: #A99C82; } body.modo-app.tema-luxo .tabs-m a.on { color: #E7D3A1; background: rgba(201,169,97,.12); }
